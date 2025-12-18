@@ -48,7 +48,10 @@ module.exports = (io, socket) => {
     }
   });
 
-  // Leave matchmaking queue
+//   socket.on('disconnect', () => {
+//     matchmakingService.removeFromQueue(userId);
+//   });
+
   socket.on('leave_queue', () => {
     const removed = matchmakingService.removeFromQueue(userId);
     
