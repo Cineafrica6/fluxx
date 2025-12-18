@@ -500,25 +500,58 @@ async function startWebRTC(isInitiator) {
     peerConnection.ontrack = (event) => {
         logSocket(`Received remote track: ${event.track.kind}`, 'info');
         
+        const remoteVideo = document.getElementById('remoteVideo');
+        let streamToUse = null;
+        
         if (event.streams && event.streams.length > 0) {
             // Use the stream from the event
-            const remoteVideo = document.getElementById('remoteVideo');
-            remoteVideo.srcObject = event.streams[0];
-            logSocket('Remote stream set from event', 'success');
+            streamToUse = event.streams[0];
+            logSocket(`Using stream from event (${streamToUse.getTracks().length} tracks)`, 'info');
         } else if (event.track) {
             // Fallback: add track to our remote stream
             if (!remoteStream) {
                 remoteStream = new MediaStream();
             }
             remoteStream.addTrack(event.track);
-            const remoteVideo = document.getElementById('remoteVideo');
-            remoteVideo.srcObject = remoteStream;
-            logSocket('Remote track added to stream', 'success');
+            streamToUse = remoteStream;
+            logSocket(`Added track to stream (${remoteStream.getTracks().length} tracks)`, 'info');
         }
+        
+        if (streamToUse) {
+            remoteVideo.srcObject = streamToUse;
+            logSocket('Remote stream assigned to video element', 'success');
+            
+            // Force play with error handling
+            const playPromise = remoteVideo.play();
+            if (playPromise !== undefined) {
+                playPromise.then(() => {
+                    logSocket('Remote video is playing', 'success');
+                }).catch(error => {
+                    logSocket(`Failed to play remote video: ${error.message}`, 'error');
+                    // Try unmuting and playing again
+                    remoteVideo.muted = false;
+                    remoteVideo.play().catch(err => {
+                        logSocket(`Retry play failed: ${err.message}`, 'error');
+                    });
+                });
+            }
+        }
+        
+        // Log track details
+        logSocket(`Track readyState: ${event.track.readyState}, enabled: ${event.track.enabled}`, 'info');
         
         // Handle track ended
         event.track.onended = () => {
             logSocket(`Remote ${event.track.kind} track ended`, 'info');
+        };
+        
+        // Handle track mute/unmute
+        event.track.onmute = () => {
+            logSocket(`Remote ${event.track.kind} track muted`, 'warn');
+        };
+        
+        event.track.onunmute = () => {
+            logSocket(`Remote ${event.track.kind} track unmuted`, 'info');
         };
     };
 
@@ -577,8 +610,14 @@ async function handleOffer(offer) {
             await startWebRTC(false);
         }
 
+        // Check if we're already processing this offer
+        if (peerConnection.signalingState !== 'stable' && peerConnection.signalingState !== 'have-local-offer') {
+            logSocket(`Cannot set remote offer, current state: ${peerConnection.signalingState}`, 'warn');
+            return;
+        }
+
         await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
-        logSocket('Remote description set', 'info');
+        logSocket('Remote description set (offer)', 'info');
         
         const answer = await peerConnection.createAnswer({
             offerToReceiveAudio: true,
@@ -599,11 +638,39 @@ async function handleOffer(offer) {
 
 async function handleAnswer(answer) {
     try {
+        if (!peerConnection) {
+            logSocket('No peer connection when handling answer', 'error');
+            return;
+        }
+
+        // Only set remote description if we're in the correct state (have-local-offer)
+        const currentState = peerConnection.signalingState;
+        logSocket(`Current signaling state: ${currentState}`, 'info');
+        
+        if (currentState !== 'have-local-offer') {
+            if (currentState === 'stable') {
+                // Connection might already be established via ICE candidates
+                logSocket('Connection already stable - may be connected via ICE', 'info');
+                // Check if we already have remote tracks
+                const receivers = peerConnection.getReceivers();
+                if (receivers.length > 0) {
+                    logSocket(`Already have ${receivers.length} remote track(s), connection likely established`, 'success');
+                }
+                return;
+            }
+            logSocket(`Cannot set remote answer, current state: ${currentState}, expected: have-local-offer`, 'warn');
+            return;
+        }
+
         await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
         logSocket('Answer remote description set', 'info');
         logSocket('WebRTC connection established', 'success');
     } catch (error) {
         logSocket(`Error handling answer: ${error.message}`, 'error');
+        // If error is about wrong state but we have tracks, connection might still work
+        if (error.message.includes('wrong state') && peerConnection.getReceivers().length > 0) {
+            logSocket('Connection may still work despite state error', 'info');
+        }
     }
 }
 
