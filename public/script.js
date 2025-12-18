@@ -468,22 +468,73 @@ async function startWebRTC(isInitiator) {
         await startLocalVideo();
     }
 
+    // Initialize remote stream early
+    if (!remoteStream) {
+        remoteStream = new MediaStream();
+        const remoteVideo = document.getElementById('remoteVideo');
+        remoteVideo.srcObject = remoteStream;
+        
+        // Add error handling for remote video
+        remoteVideo.onerror = (error) => {
+            logSocket(`Remote video error: ${error.message}`, 'error');
+        };
+        
+        remoteVideo.onloadedmetadata = () => {
+            logSocket('Remote video metadata loaded', 'success');
+            remoteVideo.play().catch(err => {
+                logSocket(`Failed to play remote video: ${err.message}`, 'error');
+            });
+        };
+    }
+
     // Create peer connection
     peerConnection = new RTCPeerConnection(rtcConfig);
 
     // Add local stream
     localStream.getTracks().forEach(track => {
         peerConnection.addTrack(track, localStream);
+        logSocket(`Added local track: ${track.kind}`, 'info');
     });
 
-    // Handle remote stream
+    // Handle remote stream - this fires when remote tracks are received
     peerConnection.ontrack = (event) => {
-        if (!remoteStream) {
-            remoteStream = new MediaStream();
-            document.getElementById('remoteVideo').srcObject = remoteStream;
+        logSocket(`Received remote track: ${event.track.kind}`, 'info');
+        
+        if (event.streams && event.streams.length > 0) {
+            // Use the stream from the event
+            const remoteVideo = document.getElementById('remoteVideo');
+            remoteVideo.srcObject = event.streams[0];
+            logSocket('Remote stream set from event', 'success');
+        } else if (event.track) {
+            // Fallback: add track to our remote stream
+            if (!remoteStream) {
+                remoteStream = new MediaStream();
+            }
+            remoteStream.addTrack(event.track);
+            const remoteVideo = document.getElementById('remoteVideo');
+            remoteVideo.srcObject = remoteStream;
+            logSocket('Remote track added to stream', 'success');
         }
-        remoteStream.addTrack(event.track);
-        logSocket('Remote stream received', 'success');
+        
+        // Handle track ended
+        event.track.onended = () => {
+            logSocket(`Remote ${event.track.kind} track ended`, 'info');
+        };
+    };
+
+    // Handle connection state changes
+    peerConnection.onconnectionstatechange = () => {
+        logSocket(`Connection state: ${peerConnection.connectionState}`, 'info');
+        if (peerConnection.connectionState === 'connected') {
+            logSocket('WebRTC connection established!', 'success');
+        } else if (peerConnection.connectionState === 'failed') {
+            logSocket('WebRTC connection failed', 'error');
+        }
+    };
+
+    // Handle ICE connection state
+    peerConnection.oniceconnectionstatechange = () => {
+        logSocket(`ICE connection state: ${peerConnection.iceConnectionState}`, 'info');
     };
 
     // Handle ICE candidates
@@ -493,49 +544,77 @@ async function startWebRTC(isInitiator) {
                 candidate: event.candidate,
                 roomId: currentRoomId
             });
+            logSocket('ICE candidate sent', 'info');
+        } else if (!event.candidate) {
+            logSocket('All ICE candidates sent', 'info');
         }
     };
 
     // If initiator, create offer
     if (isInitiator) {
-        const offer = await peerConnection.createOffer();
-        await peerConnection.setLocalDescription(offer);
-        
-        socket.emit('webrtc_offer', {
-            offer: offer,
-            roomId: currentRoomId
-        });
-        
-        logSocket('WebRTC offer sent', 'info');
+        try {
+            const offer = await peerConnection.createOffer({
+                offerToReceiveAudio: true,
+                offerToReceiveVideo: true
+            });
+            await peerConnection.setLocalDescription(offer);
+            
+            socket.emit('webrtc_offer', {
+                offer: offer,
+                roomId: currentRoomId
+            });
+            
+            logSocket('WebRTC offer sent', 'info');
+        } catch (error) {
+            logSocket(`Error creating offer: ${error.message}`, 'error');
+        }
     }
 }
 
 async function handleOffer(offer) {
-    if (!peerConnection) {
-        await startWebRTC(false);
-    }
+    try {
+        if (!peerConnection) {
+            await startWebRTC(false);
+        }
 
-    await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
-    
-    const answer = await peerConnection.createAnswer();
-    await peerConnection.setLocalDescription(answer);
-    
-    socket.emit('webrtc_answer', {
-        answer: answer,
-        roomId: currentRoomId
-    });
-    
-    logSocket('WebRTC answer sent', 'info');
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+        logSocket('Remote description set', 'info');
+        
+        const answer = await peerConnection.createAnswer({
+            offerToReceiveAudio: true,
+            offerToReceiveVideo: true
+        });
+        await peerConnection.setLocalDescription(answer);
+        
+        socket.emit('webrtc_answer', {
+            answer: answer,
+            roomId: currentRoomId
+        });
+        
+        logSocket('WebRTC answer sent', 'info');
+    } catch (error) {
+        logSocket(`Error handling offer: ${error.message}`, 'error');
+    }
 }
 
 async function handleAnswer(answer) {
-    await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
-    logSocket('WebRTC connection established', 'success');
+    try {
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+        logSocket('Answer remote description set', 'info');
+        logSocket('WebRTC connection established', 'success');
+    } catch (error) {
+        logSocket(`Error handling answer: ${error.message}`, 'error');
+    }
 }
 
 async function handleIceCandidate(candidate) {
-    if (peerConnection) {
-        await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+    try {
+        if (peerConnection && candidate) {
+            await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+            logSocket('ICE candidate added', 'info');
+        }
+    } catch (error) {
+        logSocket(`Error adding ICE candidate: ${error.message}`, 'error');
     }
 }
 
