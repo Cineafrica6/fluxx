@@ -458,6 +458,11 @@ function endChat() {
 // ========== Video Chat ==========
 async function startLocalVideo() {
     try {
+        // If we already have a stream, stop it first
+        if (localStream) {
+            localStream.getTracks().forEach(track => track.stop());
+        }
+        
         localStream = await navigator.mediaDevices.getUserMedia({
             video: true,
             audio: true
@@ -465,6 +470,11 @@ async function startLocalVideo() {
 
         document.getElementById('localVideo').srcObject = localStream;
         logSocket('Local video started', 'success');
+        
+        // If peer connection exists, replace tracks
+        if (peerConnection) {
+            replaceLocalTracks();
+        }
     } catch (error) {
         logSocket(`Failed to start video: ${error.message}`, 'error');
         alert('Failed to access camera/microphone. Please grant permissions.');
@@ -473,10 +483,93 @@ async function startLocalVideo() {
 
 function stopLocalVideo() {
     if (localStream) {
-        localStream.getTracks().forEach(track => track.stop());
+        // Stop all tracks
+        localStream.getTracks().forEach(track => {
+            track.stop();
+            // Remove track from peer connection if it exists
+            if (peerConnection) {
+                const sender = peerConnection.getSenders().find(s => s.track === track);
+                if (sender) {
+                    peerConnection.removeTrack(sender);
+                    logSocket(`Removed ${track.kind} track from peer connection`, 'info');
+                }
+            }
+        });
+        
         document.getElementById('localVideo').srcObject = null;
         localStream = null;
         logSocket('Local video stopped', 'info');
+        
+        // If peer connection exists, we need to renegotiate or send empty tracks
+        if (peerConnection && peerConnection.signalingState !== 'closed') {
+            // Create a new offer to notify remote peer
+            renegotiateConnection();
+        }
+    }
+}
+
+// Replace local tracks in peer connection
+async function replaceLocalTracks() {
+    if (!peerConnection || !localStream) {
+        return;
+    }
+    
+    try {
+        const senders = peerConnection.getSenders();
+        const newTracks = localStream.getTracks();
+        
+        // Replace existing tracks
+        for (const sender of senders) {
+            if (sender.track) {
+                const trackKind = sender.track.kind;
+                const newTrack = newTracks.find(t => t.kind === trackKind);
+                
+                if (newTrack) {
+                    await sender.replaceTrack(newTrack);
+                    logSocket(`Replaced ${trackKind} track in peer connection`, 'info');
+                }
+            }
+        }
+        
+        // Add any new tracks that don't have senders yet
+        for (const track of newTracks) {
+            const hasSender = senders.some(s => s.track && s.track.kind === track.kind);
+            if (!hasSender) {
+                peerConnection.addTrack(track, localStream);
+                logSocket(`Added new ${track.kind} track to peer connection`, 'info');
+            }
+        }
+    } catch (error) {
+        logSocket(`Error replacing tracks: ${error.message}`, 'error');
+    }
+}
+
+// Renegotiate connection when tracks change
+async function renegotiateConnection() {
+    if (!peerConnection || !currentRoomId || !socket) {
+        return;
+    }
+    
+    try {
+        // Only renegotiate if connection is stable
+        const signalingState = peerConnection.signalingState;
+        logSocket(`Renegotiating connection (current state: ${signalingState})`, 'info');
+        
+        if (signalingState === 'stable' || signalingState === 'have-local-offer' || signalingState === 'have-remote-offer') {
+            const offer = await peerConnection.createOffer();
+            await peerConnection.setLocalDescription(offer);
+            
+            socket.emit('webrtc_offer', {
+                offer: offer,
+                roomId: currentRoomId
+            });
+            
+            logSocket('Renegotiation offer sent', 'info');
+        } else {
+            logSocket(`Cannot renegotiate in state: ${signalingState}`, 'warn');
+        }
+    } catch (error) {
+        logSocket(`Error renegotiating: ${error.message}`, 'error');
     }
 }
 
@@ -498,11 +591,14 @@ async function startWebRTC(isInitiator) {
     // Create peer connection
     peerConnection = new RTCPeerConnection(rtcConfig);
 
-    // Add local stream
+    // Add local stream tracks
     localStream.getTracks().forEach(track => {
         peerConnection.addTrack(track, localStream);
         logSocket(`Added local track: ${track.kind}`, 'info');
     });
+    
+    // Store reference to local stream for track replacement
+    peerConnection._localStream = localStream;
 
     // Handle remote stream - this fires when remote tracks are received
     peerConnection.ontrack = (event) => {
@@ -521,6 +617,14 @@ async function startWebRTC(isInitiator) {
             logSocket(`Using stream from event (${streamToUse.getTracks().length} tracks)`, 'info');
         } else if (event.track) {
             // Fallback: add track to our remote stream
+            // Check if track already exists (replacement scenario)
+            const existingTrack = remoteStream.getTracks().find(t => t.kind === event.track.kind);
+            if (existingTrack) {
+                // Remove old track and add new one (track replacement)
+                remoteStream.removeTrack(existingTrack);
+                existingTrack.stop(); // Stop the old track
+                logSocket(`Replaced existing ${event.track.kind} track`, 'info');
+            }
             remoteStream.addTrack(event.track);
             streamToUse = remoteStream;
             if (!remoteStreamReference) {
@@ -529,13 +633,35 @@ async function startWebRTC(isInitiator) {
             logSocket(`Added track to stream (${remoteStream.getTracks().length} tracks)`, 'info');
         }
         
+        // Handle track replacement - if this is a replacement, update the video element
+        if (event.track.kind === 'video' && videoElementSetup && remoteVideo.srcObject) {
+            // Track was replaced, ensure video element is updated
+            logSocket('Video track replaced, updating video element', 'info');
+            // The stream should automatically update, but force a refresh if needed
+            if (remoteVideo.readyState === 0 || remoteVideo.paused) {
+                setTimeout(() => {
+                    playRemoteVideo();
+                }, 100);
+            }
+        }
+        
         // Only set srcObject ONCE, using the stored reference
         // This prevents "play() request was interrupted" errors
         if (remoteStreamReference && !videoElementSetup) {
+            // Ensure video element attributes are set correctly
+            remoteVideo.setAttribute('playsinline', 'true');
+            remoteVideo.setAttribute('autoplay', 'true');
+            remoteVideo.muted = false; // Don't mute remote video
+            
             remoteVideo.srcObject = remoteStreamReference;
             videoElementSetup = true;
             logSocket('Remote stream assigned to video element (one-time setup)', 'success');
             logSocket(`Stream has ${remoteStreamReference.getTracks().length} tracks`, 'info');
+            
+            // Log all tracks in the stream
+            remoteStreamReference.getTracks().forEach((track, idx) => {
+                logSocket(`Stream track ${idx}: ${track.kind}, enabled=${track.enabled}, muted=${track.muted}, readyState=${track.readyState}`, 'info');
+            });
             
             // Set up video element event handlers (only once)
             remoteVideo.onloadedmetadata = () => {
@@ -558,26 +684,55 @@ async function startWebRTC(isInitiator) {
                 playRemoteVideo();
             };
             
+            remoteVideo.onplay = () => {
+                logSocket('Remote video started playing', 'success');
+            };
+            
+            remoteVideo.onplaying = () => {
+                logSocket('Remote video is playing', 'success');
+            };
+            
             remoteVideo.onerror = (error) => {
                 logSocket(`Remote video error: ${error}`, 'error');
             };
             
-            // Try to play immediately if metadata is already loaded
-            if (remoteVideo.readyState >= 2) { // HAVE_CURRENT_DATA
+            // Force load the video
+            remoteVideo.load();
+            
+            // Try to play immediately and on multiple intervals
+            const tryPlay = () => {
+                logSocket(`Attempting play (readyState: ${remoteVideo.readyState})`, 'info');
                 playRemoteVideo();
-            } else {
-                // If not ready, try after a short delay
-                setTimeout(() => {
-                    logSocket(`Video readyState after delay: ${remoteVideo.readyState}`, 'info');
-                    playRemoteVideo();
-                }, 500);
+            };
+            
+            // Try immediately
+            tryPlay();
+            
+            // Try after delays
+            setTimeout(tryPlay, 100);
+            setTimeout(tryPlay, 500);
+            setTimeout(tryPlay, 1000);
+            setTimeout(tryPlay, 2000);
+            setTimeout(tryPlay, 3000);
+            
+            // Also set up a periodic check when connection is established
+            const playCheckInterval = setInterval(() => {
+                const connState = peerConnection?.connectionState;
+                const iceState = peerConnection?.iceConnectionState;
                 
-                // Also try after a longer delay as fallback
-                setTimeout(() => {
-                    logSocket(`Video readyState after longer delay: ${remoteVideo.readyState}`, 'info');
-                    playRemoteVideo();
-                }, 2000);
-            }
+                if (connState === 'connected' && (iceState === 'connected' || iceState === 'completed')) {
+                    if (remoteVideo.readyState === 0 && remoteVideo.srcObject) {
+                        logSocket('Connection established but video not loaded, forcing play...', 'info');
+                        tryPlay();
+                    } else if (remoteVideo.paused) {
+                        logSocket('Video is paused, attempting to play...', 'info');
+                        tryPlay();
+                    }
+                }
+                
+                // Clear interval after 10 seconds
+                setTimeout(() => clearInterval(playCheckInterval), 10000);
+            }, 500);
         }
         
         // Log track details
@@ -598,29 +753,57 @@ async function startWebRTC(isInitiator) {
                 const connState = peerConnection.connectionState;
                 logSocket(`Track muted - ICE: ${iceState}, Connection: ${connState}`, 'warn');
                 
-                // Try to unmute and play
+                // Immediately try to unmute the track
+                if (event.track.muted) {
+                    // Can't directly unmute a track, but we can ensure it's enabled
+                    event.track.enabled = true;
+                    logSocket('Re-enabled video track', 'info');
+                }
+                
+                // Try to unmute video element and play
                 setTimeout(() => {
                     const remoteVideo = document.getElementById('remoteVideo');
-                    if (remoteVideo) {
+                    if (remoteVideo && remoteVideo.srcObject) {
                         // Force unmute
                         remoteVideo.muted = false;
-                        // Try to enable the track
-                        if (event.track.enabled === false) {
-                            event.track.enabled = true;
+                        // Force reload if needed
+                        if (remoteVideo.readyState === 0) {
+                            logSocket('Video not loaded, forcing load...', 'info');
+                            remoteVideo.load();
                         }
                         playRemoteVideo();
                     }
-                }, 200);
+                }, 100);
+                
+                // Also retry after connection stabilizes
+                setTimeout(() => {
+                    if (peerConnection.iceConnectionState === 'connected' || 
+                        peerConnection.iceConnectionState === 'completed') {
+                        const remoteVideo = document.getElementById('remoteVideo');
+                        if (remoteVideo) {
+                            remoteVideo.muted = false;
+                            playRemoteVideo();
+                        }
+                    }
+                }, 1000);
             }
         };
         
         event.track.onunmute = () => {
             logSocket(`Remote ${event.track.kind} track unmuted`, 'info');
             if (event.track.kind === 'video' && videoElementSetup) {
-                // Track unmuted, try to play
-                setTimeout(() => {
-                    playRemoteVideo();
-                }, 100);
+                // Track unmuted, ensure video element is ready and play
+                const remoteVideo = document.getElementById('remoteVideo');
+                if (remoteVideo) {
+                    remoteVideo.muted = false;
+                    // If video hasn't loaded, force load
+                    if (remoteVideo.readyState === 0) {
+                        remoteVideo.load();
+                    }
+                    setTimeout(() => {
+                        playRemoteVideo();
+                    }, 100);
+                }
             }
         };
     };
@@ -665,32 +848,61 @@ async function startWebRTC(isInitiator) {
         // Ensure video is not muted
         remoteVideo.muted = false;
         
+        // Ensure all video tracks are enabled and not muted
+        videoTracks.forEach((track, index) => {
+            if (!track.enabled) {
+                track.enabled = true;
+                logSocket(`Enabled video track ${index}`, 'info');
+            }
+        });
+        
         // Check if video has loaded any data
         const readyState = remoteVideo.readyState;
         logSocket(`Attempting to play video (readyState: ${readyState}, connection: ${connState}, ICE: ${iceState})`, 'info');
+        
+        // If readyState is 0, try to force load
+        if (readyState === 0) {
+            logSocket('Video readyState is 0, attempting to load...', 'info');
+            remoteVideo.load();
+            // Wait a bit for load to process
+            setTimeout(() => {
+                logSocket(`Video readyState after load: ${remoteVideo.readyState}`, 'info');
+            }, 100);
+        }
         
         // Try to play - even if readyState is 0, sometimes it works
         const playPromise = remoteVideo.play();
         if (playPromise !== undefined) {
             playPromise.then(() => {
                 logSocket('Remote video is playing!', 'success');
-                const width = remoteVideo.videoWidth;
-                const height = remoteVideo.videoHeight;
-                if (width > 0 && height > 0) {
-                    logSocket(`Video dimensions: ${width}x${height}`, 'success');
-                }
+                // Check dimensions after a short delay
+                setTimeout(() => {
+                    const width = remoteVideo.videoWidth;
+                    const height = remoteVideo.videoHeight;
+                    if (width > 0 && height > 0) {
+                        logSocket(`Video dimensions: ${width}x${height}`, 'success');
+                    } else {
+                        logSocket('Video playing but no dimensions yet', 'info');
+                    }
+                }, 500);
             }).catch(error => {
                 logSocket(`Failed to play remote video: ${error.message}`, 'error');
                 // Only retry if connection is not completely failed
                 if (connState !== 'failed' && iceState !== 'failed') {
-                    setTimeout(() => {
-                        logSocket('Retrying play...', 'info');
-                        remoteVideo.play().then(() => {
-                            logSocket('Remote video playing on retry!', 'success');
-                        }).catch(err => {
-                            logSocket(`Retry play failed: ${err.message}`, 'error');
-                        });
-                    }, 1000);
+                    // Try multiple retries with increasing delays
+                    const retries = [500, 1000, 2000];
+                    retries.forEach((delay, index) => {
+                        setTimeout(() => {
+                            logSocket(`Retry ${index + 1} play...`, 'info');
+                            remoteVideo.play().then(() => {
+                                logSocket(`Remote video playing on retry ${index + 1}!`, 'success');
+                            }).catch(err => {
+                                if (index === retries.length - 1) {
+                                    logSocket(`All retries failed: ${err.message}`, 'error');
+                                }
+                            });
+                        }, delay);
+                    });
                 }
             });
         }
