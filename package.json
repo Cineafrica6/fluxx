@@ -1,27 +1,31 @@
 {
   "name": "fluxx-backend",
   "version": "1.0.0",
-  "main": "index.js",
+  "description": "Fluxx - University-exclusive random video chat backend",
+  "main": "src/server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
+  "keywords": ["video-chat", "webrtc", "university", "socket.io"],
+  "author": "Murewa Ajala",
+  "license": "MIT",
   "dependencies": {
-    "bcrypt": "^6.0.0",
+    "express": "^4.18.2",
+    "socket.io": "^4.6.1",
+    "mongoose": "^8.0.3",
+    "jsonwebtoken": "^9.0.2",
+    "bcryptjs": "^2.4.3",
+    "dotenv": "^16.3.1",
     "cors": "^2.8.5",
-    "dotenv": "^17.2.3",
-    "express": "^5.2.1",
-    "jsonwebtoken": "^9.0.3",
-    "mongodb": "^7.0.0",
-    "mongoose": "^9.0.2",
-    "socket.io": "^4.8.1",
+    "helmet": "^7.1.0",
+    "morgan": "^1.10.0",
+    "express-validator": "^7.0.1",
+    "nodemailer": "^6.9.7",
     "swagger-jsdoc": "^6.2.8",
-    "swagger-ui-express": "^5.0.1"
+    "swagger-ui-express": "^5.0.0"
   },
   "devDependencies": {
-    "nodemon": "^3.1.11"
+    "nodemon": "^3.0.2"
   }
 }
