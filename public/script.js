@@ -468,24 +468,14 @@ async function startWebRTC(isInitiator) {
         await startLocalVideo();
     }
 
-    // Initialize remote stream early
+    // Initialize remote stream early - but don't set srcObject yet
     if (!remoteStream) {
         remoteStream = new MediaStream();
-        const remoteVideo = document.getElementById('remoteVideo');
-        remoteVideo.srcObject = remoteStream;
-        
-        // Add error handling for remote video
-        remoteVideo.onerror = (error) => {
-            logSocket(`Remote video error: ${error.message}`, 'error');
-        };
-        
-        remoteVideo.onloadedmetadata = () => {
-            logSocket('Remote video metadata loaded', 'success');
-            remoteVideo.play().catch(err => {
-                logSocket(`Failed to play remote video: ${err.message}`, 'error');
-            });
-        };
     }
+    
+    // Track if we've set up the video element and the stream reference
+    let videoElementSetup = false;
+    let remoteStreamReference = null;
 
     // Create peer connection
     peerConnection = new RTCPeerConnection(rtcConfig);
@@ -504,36 +494,43 @@ async function startWebRTC(isInitiator) {
         let streamToUse = null;
         
         if (event.streams && event.streams.length > 0) {
-            // Use the stream from the event
+            // Use the stream from the event (preferred method)
             streamToUse = event.streams[0];
+            // Store reference to avoid setting srcObject multiple times
+            if (!remoteStreamReference) {
+                remoteStreamReference = streamToUse;
+            }
             logSocket(`Using stream from event (${streamToUse.getTracks().length} tracks)`, 'info');
         } else if (event.track) {
             // Fallback: add track to our remote stream
-            if (!remoteStream) {
-                remoteStream = new MediaStream();
-            }
             remoteStream.addTrack(event.track);
             streamToUse = remoteStream;
+            if (!remoteStreamReference) {
+                remoteStreamReference = streamToUse;
+            }
             logSocket(`Added track to stream (${remoteStream.getTracks().length} tracks)`, 'info');
         }
         
-        if (streamToUse) {
-            remoteVideo.srcObject = streamToUse;
-            logSocket('Remote stream assigned to video element', 'success');
+        // Only set srcObject ONCE, using the stored reference
+        // This prevents "play() request was interrupted" errors
+        if (remoteStreamReference && !videoElementSetup) {
+            remoteVideo.srcObject = remoteStreamReference;
+            videoElementSetup = true;
+            logSocket('Remote stream assigned to video element (one-time setup)', 'success');
             
-            // Force play with error handling
-            const playPromise = remoteVideo.play();
-            if (playPromise !== undefined) {
-                playPromise.then(() => {
-                    logSocket('Remote video is playing', 'success');
-                }).catch(error => {
-                    logSocket(`Failed to play remote video: ${error.message}`, 'error');
-                    // Try unmuting and playing again
-                    remoteVideo.muted = false;
-                    remoteVideo.play().catch(err => {
-                        logSocket(`Retry play failed: ${err.message}`, 'error');
-                    });
-                });
+            // Set up video element event handlers (only once)
+            remoteVideo.onloadedmetadata = () => {
+                logSocket('Remote video metadata loaded', 'success');
+                playRemoteVideo();
+            };
+            
+            remoteVideo.onerror = (error) => {
+                logSocket(`Remote video error: ${error}`, 'error');
+            };
+            
+            // Try to play immediately if metadata is already loaded
+            if (remoteVideo.readyState >= 2) { // HAVE_CURRENT_DATA
+                playRemoteVideo();
             }
         }
         
@@ -548,12 +545,58 @@ async function startWebRTC(isInitiator) {
         // Handle track mute/unmute
         event.track.onmute = () => {
             logSocket(`Remote ${event.track.kind} track muted`, 'warn');
+            // Try to unmute the video element if track gets muted
+            if (event.track.kind === 'video') {
+                setTimeout(() => {
+                    const remoteVideo = document.getElementById('remoteVideo');
+                    if (remoteVideo) {
+                        remoteVideo.muted = false;
+                        playRemoteVideo();
+                    }
+                }, 100);
+            }
         };
         
         event.track.onunmute = () => {
             logSocket(`Remote ${event.track.kind} track unmuted`, 'info');
+            if (event.track.kind === 'video' && videoElementSetup) {
+                playRemoteVideo();
+            }
         };
     };
+    
+    // Helper function to play remote video
+    function playRemoteVideo() {
+        const remoteVideo = document.getElementById('remoteVideo');
+        if (!remoteVideo || !remoteVideo.srcObject) {
+            logSocket('Cannot play: video element or stream missing', 'warn');
+            return;
+        }
+        
+        // Ensure video is not muted
+        remoteVideo.muted = false;
+        
+        // Wait a bit if video isn't ready
+        if (remoteVideo.readyState < 2) {
+            logSocket('Video not ready, waiting for metadata...', 'info');
+            return;
+        }
+        
+        const playPromise = remoteVideo.play();
+        if (playPromise !== undefined) {
+            playPromise.then(() => {
+                logSocket('Remote video is playing', 'success');
+            }).catch(error => {
+                logSocket(`Failed to play remote video: ${error.message}`, 'error');
+                // Retry after a short delay
+                setTimeout(() => {
+                    remoteVideo.play().catch(err => {
+                        logSocket(`Retry play failed: ${err.message}`, 'error');
+                    });
+                }, 500);
+            });
+        }
+    }
 
     // Handle connection state changes
     peerConnection.onconnectionstatechange = () => {
