@@ -117,7 +117,15 @@ async function register(event) {
         localStorage.setItem('fluxx_token', token);
         currentUser = result.data.data.user;
         updateStatusBar();
-        alert('Registration successful! Check console logs for verification OTP.');
+        
+        // Display OTP if provided
+        if (result.data.data.otp) {
+            displayOTP(result.data.data.otp);
+            // Auto-fill email in verify form
+            document.getElementById('verifyEmailInput').value = email;
+        }
+        
+        alert('Registration successful! Use the OTP displayed below to verify your email.');
     }
 }
 
@@ -158,6 +166,11 @@ async function verifyEmail(event) {
         alert('Email verified successfully!');
         // Clear the form
         document.getElementById('verifyEmailForm').reset();
+        // Hide OTP display
+        const otpDisplay = document.getElementById('otpDisplay');
+        if (otpDisplay) {
+            otpDisplay.style.display = 'none';
+        }
         // Refresh user data
         if (token) {
             getMe();
@@ -176,7 +189,31 @@ async function resendOTP() {
     const result = await apiRequest('/api/auth/resend-otp', 'POST', { email });
     
     if (result.ok) {
-        alert('OTP sent successfully! Check console logs for the OTP.');
+        // Display OTP if provided
+        if (result.data.data && result.data.data.otp) {
+            displayOTP(result.data.data.otp);
+        }
+        alert('OTP sent successfully! Check the OTP displayed below.');
+    }
+}
+
+function displayOTP(otp) {
+    const otpDisplay = document.getElementById('otpDisplay');
+    const otpCode = document.getElementById('otpCode');
+    
+    if (otpDisplay && otpCode) {
+        otpCode.textContent = otp;
+        otpDisplay.style.display = 'block';
+        
+        // Scroll to OTP display
+        otpDisplay.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        
+        // Auto-fill OTP input
+        const otpInput = document.getElementById('verifyOTP');
+        if (otpInput) {
+            otpInput.value = otp;
+            otpInput.focus();
+        }
     }
 }
 

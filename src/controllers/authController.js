@@ -43,7 +43,7 @@ const register = async (req, res, next) => {
 
     res.status(201).json({
       success: true,
-      message: 'Registration successful. Please check your email to verify your account.',
+      message: 'Registration successful. Please verify your account with the OTP.',
       data: {
         user: {
           id: user._id,
@@ -51,7 +51,8 @@ const register = async (req, res, next) => {
           displayName: user.displayName,
           isVerified: user.isVerified
         },
-        token
+        token,
+        otp: verificationOTP // Include OTP in response for testing (remove in production)
       }
     });
   } catch (error) {
@@ -218,7 +219,10 @@ const resendOTP = async (req, res, next) => {
 
     res.json({
       success: true,
-      message: 'OTP sent successfully. Please check your email.'
+      message: 'OTP sent successfully. Please check your email.',
+      data: {
+        otp: verificationOTP // Include OTP in response for testing (remove in production)
+      }
     });
   } catch (error) {
     next(error);

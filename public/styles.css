@@ -278,6 +278,63 @@ textarea {
     font-style: italic;
 }
 
+.otp-display {
+    margin-top: 20px;
+    padding: 20px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 12px;
+    text-align: center;
+    animation: fadeIn 0.3s;
+}
+
+.otp-label {
+    color: white;
+    font-size: 0.9em;
+    margin-bottom: 10px;
+    opacity: 0.9;
+}
+
+.otp-code {
+    font-size: 2.5em;
+    font-weight: 700;
+    color: white;
+    letter-spacing: 8px;
+    font-family: 'Courier New', monospace;
+    background: rgba(255, 255, 255, 0.2);
+    padding: 15px 20px;
+    border-radius: 8px;
+    margin: 10px 0;
+    display: inline-block;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+.otp-expiry {
+    color: white;
+    font-size: 0.85em;
+    margin-top: 10px;
+    opacity: 0.8;
+}
+
+@media (max-width: 768px) {
+    .otp-code {
+        font-size: 2em;
+        letter-spacing: 6px;
+        padding: 12px 15px;
+    }
+    
+    .otp-display {
+        padding: 15px;
+    }
+}
+
+@media (max-width: 480px) {
+    .otp-code {
+        font-size: 1.8em;
+        letter-spacing: 4px;
+        padding: 10px 12px;
+    }
+}
+
 .response-section {
     padding: 30px;
     background: #f8f9fa;

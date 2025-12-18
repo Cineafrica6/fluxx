@@ -72,7 +72,12 @@
                     <button type="submit" class="btn btn-primary">Verify</button>
                 </form>
                 <button onclick="resendOTP()" class="btn btn-secondary" style="margin-top: 10px;">Resend OTP</button>
-                <p class="hint">💡 Check console logs for OTP after registration</p>
+                <div id="otpDisplay" class="otp-display" style="display: none;">
+                    <p class="otp-label">Your OTP:</p>
+                    <div class="otp-code" id="otpCode"></div>
+                    <p class="otp-expiry">⏰ Expires in 10 minutes</p>
+                </div>
+                <p class="hint">💡 Your OTP will be displayed above after registration or resend</p>
             </div>
 
             <div class="card">
