@@ -517,10 +517,26 @@ async function startWebRTC(isInitiator) {
             remoteVideo.srcObject = remoteStreamReference;
             videoElementSetup = true;
             logSocket('Remote stream assigned to video element (one-time setup)', 'success');
+            logSocket(`Stream has ${remoteStreamReference.getTracks().length} tracks`, 'info');
             
             // Set up video element event handlers (only once)
             remoteVideo.onloadedmetadata = () => {
                 logSocket('Remote video metadata loaded', 'success');
+                playRemoteVideo();
+            };
+            
+            remoteVideo.onloadeddata = () => {
+                logSocket('Remote video data loaded', 'success');
+                playRemoteVideo();
+            };
+            
+            remoteVideo.oncanplay = () => {
+                logSocket('Remote video can play', 'success');
+                playRemoteVideo();
+            };
+            
+            remoteVideo.oncanplaythrough = () => {
+                logSocket('Remote video can play through', 'success');
                 playRemoteVideo();
             };
             
@@ -531,6 +547,18 @@ async function startWebRTC(isInitiator) {
             // Try to play immediately if metadata is already loaded
             if (remoteVideo.readyState >= 2) { // HAVE_CURRENT_DATA
                 playRemoteVideo();
+            } else {
+                // If not ready, try after a short delay
+                setTimeout(() => {
+                    logSocket(`Video readyState after delay: ${remoteVideo.readyState}`, 'info');
+                    playRemoteVideo();
+                }, 500);
+                
+                // Also try after a longer delay as fallback
+                setTimeout(() => {
+                    logSocket(`Video readyState after longer delay: ${remoteVideo.readyState}`, 'info');
+                    playRemoteVideo();
+                }, 2000);
             }
         }
         
@@ -573,25 +601,48 @@ async function startWebRTC(isInitiator) {
             return;
         }
         
+        // Check if stream has video tracks
+        const stream = remoteVideo.srcObject;
+        const videoTracks = stream.getVideoTracks();
+        logSocket(`Stream has ${videoTracks.length} video track(s)`, 'info');
+        
+        if (videoTracks.length === 0) {
+            logSocket('No video tracks in stream', 'warn');
+            return;
+        }
+        
+        // Log video track state
+        videoTracks.forEach((track, index) => {
+            logSocket(`Video track ${index}: readyState=${track.readyState}, enabled=${track.enabled}, muted=${track.muted}`, 'info');
+        });
+        
         // Ensure video is not muted
         remoteVideo.muted = false;
         
-        // Wait a bit if video isn't ready
-        if (remoteVideo.readyState < 2) {
-            logSocket('Video not ready, waiting for metadata...', 'info');
-            return;
-        }
+        // Try to play regardless of readyState
+        // Some browsers don't properly set readyState but video still works
+        logSocket(`Attempting to play video (readyState: ${remoteVideo.readyState})`, 'info');
         
         const playPromise = remoteVideo.play();
         if (playPromise !== undefined) {
             playPromise.then(() => {
-                logSocket('Remote video is playing', 'success');
+                logSocket('Remote video is playing!', 'success');
+                logSocket(`Video dimensions: ${remoteVideo.videoWidth}x${remoteVideo.videoHeight}`, 'info');
             }).catch(error => {
                 logSocket(`Failed to play remote video: ${error.message}`, 'error');
-                // Retry after a short delay
+                // Don't give up - retry multiple times
                 setTimeout(() => {
-                    remoteVideo.play().catch(err => {
+                    logSocket('Retrying play...', 'info');
+                    remoteVideo.play().then(() => {
+                        logSocket('Remote video playing on retry!', 'success');
+                    }).catch(err => {
                         logSocket(`Retry play failed: ${err.message}`, 'error');
+                        // One more retry
+                        setTimeout(() => {
+                            remoteVideo.play().catch(finalErr => {
+                                logSocket(`Final retry failed: ${finalErr.message}`, 'error');
+                            });
+                        }, 1000);
                     });
                 }, 500);
             });
