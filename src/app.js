@@ -22,7 +22,9 @@ app.use(helmet({
       scriptSrcAttr: ["'unsafe-inline'"], // Allow inline event handlers (onclick, onsubmit, etc.)
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", "data:", "https:"],
-      connectSrc: ["'self'", "https://cdn.socket.io", "ws:", "wss:"],
+      // Allow connections to same origin and Socket.IO CDN, plus WebSocket protocols
+      // This allows the frontend to connect to the API on the same domain (Railway deployment)
+      connectSrc: ["'self'", "https://cdn.socket.io", "ws:", "wss:", "http:", "https:"],
     },
   },
 }));

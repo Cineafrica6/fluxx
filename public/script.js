@@ -1,4 +1,7 @@
-const API_URL = 'http://localhost:5000';
+// Dynamically detect API URL based on current origin
+// Works for both localhost and deployed environments (Railway, etc.)
+const API_URL = window.location.origin;
+console.log('API URL:', API_URL);
 let token = localStorage.getItem('fluxx_token') || null;
 let currentUser = null;
 let socket = null;
