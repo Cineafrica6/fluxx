@@ -48,6 +48,36 @@ class EmailService {
     return verificationUrl;
   }
 
+  async sendVerificationOTP(email, otp) {
+    // For MVP testing, just log the OTP
+    logger.info(`📧 Verification OTP for ${email}:`);
+    logger.info(`🔢 OTP: ${otp}`);
+    logger.info(`⏰ OTP expires in 10 minutes`);
+    
+    if (this.transporter) {
+      try {
+        await this.transporter.sendMail({
+          from: process.env.EMAIL_USER,
+          to: email,
+          subject: 'Verify your Fluxx account - OTP',
+          html: `
+            <h1>Welcome to Fluxx!</h1>
+            <p>Your verification code is:</p>
+            <h2 style="font-size: 32px; letter-spacing: 8px; color: #4CAF50;">${otp}</h2>
+            <p>Enter this code to verify your email address.</p>
+            <p><strong>This code expires in 10 minutes.</strong></p>
+            <p>If you didn't request this code, please ignore this email.</p>
+          `
+        });
+        logger.success(`OTP email sent to ${email}`);
+      } catch (error) {
+        logger.error('Email send error:', error.message);
+      }
+    }
+    
+    return otp;
+  }
+
   async sendBanNotification(email, reason, expiresAt) {
     logger.warn(`🚫 Ban notification for ${email}: ${reason}`);
     

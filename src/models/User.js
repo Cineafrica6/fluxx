@@ -24,8 +24,8 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
-  verificationToken: String,
-  verificationTokenExpiry: Date,
+  verificationOTP: String,
+  verificationOTPExpiry: Date,
   
   // Moderation
   reportCount: {

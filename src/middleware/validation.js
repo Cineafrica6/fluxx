@@ -14,13 +14,14 @@ const validate = (req, res, next) => {
 
 const registerValidation = [
   body('email')
-    .isEmail().withMessage('Please provide a valid email')
-    .custom((value) => {
-      if (!isUniversityEmail(value)) {
-        throw new Error('Please use a university email address');
-      }
-      return true;
-    }),
+    .isEmail().withMessage('Please provide a valid email'),
+    // University email validation disabled for testing
+    // .custom((value) => {
+    //   if (!isUniversityEmail(value)) {
+    //     throw new Error('Please use a university email address');
+    //   }
+    //   return true;
+    // }),
   body('password')
     .isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
   validate

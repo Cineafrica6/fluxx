@@ -12,7 +12,7 @@ let io;
 const initializeSocket = (server) => {
   io = socketIO(server, {
     cors: {
-      origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+      origin: true, // Allow all origins for testing
       credentials: true
     },
     pingTimeout: 60000,

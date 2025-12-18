@@ -114,7 +114,7 @@ async function register(event) {
         localStorage.setItem('fluxx_token', token);
         currentUser = result.data.data.user;
         updateStatusBar();
-        alert('Registration successful! Check console for verification link.');
+        alert('Registration successful! Check console logs for verification OTP.');
     }
 }
 
@@ -136,9 +136,45 @@ async function login(event) {
 
 async function verifyEmail(event) {
     event.preventDefault();
-    const verifyToken = document.getElementById('verifyToken').value;
+    const email = document.getElementById('verifyEmailInput').value;
+    const otp = document.getElementById('verifyOTP').value;
 
-    await apiRequest(`/api/auth/verify-email/${verifyToken}`, 'GET');
+    if (!email || !otp) {
+        alert('Please enter both email and OTP');
+        return;
+    }
+
+    if (otp.length !== 6 || !/^\d{6}$/.test(otp)) {
+        alert('OTP must be exactly 6 digits');
+        return;
+    }
+
+    const result = await apiRequest('/api/auth/verify-email', 'POST', { email, otp });
+    
+    if (result.ok) {
+        alert('Email verified successfully!');
+        // Clear the form
+        document.getElementById('verifyEmailForm').reset();
+        // Refresh user data
+        if (token) {
+            getMe();
+        }
+    }
+}
+
+async function resendOTP() {
+    const email = document.getElementById('verifyEmailInput').value || document.getElementById('registerEmail').value;
+    
+    if (!email) {
+        alert('Please enter your email address first');
+        return;
+    }
+
+    const result = await apiRequest('/api/auth/resend-otp', 'POST', { email });
+    
+    if (result.ok) {
+        alert('OTP sent successfully! Check console logs for the OTP.');
+    }
 }
 
 async function getMe() {

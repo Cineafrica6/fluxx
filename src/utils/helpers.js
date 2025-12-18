@@ -35,15 +35,23 @@ const generateVerificationToken = () => {
 };
 
 /**
+ * Generate 6-digit OTP for email verification
+ */
+const generateOTP = () => {
+  return Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit OTP
+};
+
+/**
  * Validate university email domain
+ * For testing: accepts all emails
  */
 const isUniversityEmail = (email) => {
-  // For MVP, you can either:
-  // 1. Check against UNIVERSITY_EMAIL_DOMAINS array
-  // 2. Just check if it ends with .edu
-  // 3. Accept all emails for testing
+  // For testing: accept all emails
+  // TODO: Re-enable university email validation in production
+  return true;
   
-  return email.endsWith('.edu'); // Simple check for now
+  // Production code (commented out for testing):
+  // return email.endsWith('.edu');
 };
 
 /**
@@ -58,6 +66,7 @@ module.exports = {
   generateDisplayName,
   generateUniqueDisplayName,
   generateVerificationToken,
+  generateOTP,
   isUniversityEmail,
   cleanExpiredReports
 };

@@ -65,12 +65,14 @@
             </div>
 
             <div class="card">
-                <h3>Verify Email</h3>
-                <form onsubmit="verifyEmail(event)">
-                    <input type="text" id="verifyToken" placeholder="Verification Token" required>
+                <h3>Verify Email with OTP</h3>
+                <form id="verifyEmailForm" onsubmit="verifyEmail(event)">
+                    <input type="email" id="verifyEmailInput" placeholder="Email" required>
+                    <input type="text" id="verifyOTP" placeholder="6-digit OTP" maxlength="6" pattern="[0-9]{6}" required>
                     <button type="submit" class="btn btn-primary">Verify</button>
                 </form>
-                <p class="hint">💡 Check console logs for verification URL after registration</p>
+                <button onclick="resendOTP()" class="btn btn-secondary" style="margin-top: 10px;">Resend OTP</button>
+                <p class="hint">💡 Check console logs for OTP after registration</p>
             </div>
 
             <div class="card">

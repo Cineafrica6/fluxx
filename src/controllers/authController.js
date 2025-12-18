@@ -1,7 +1,7 @@
 const User = require('../models/User');
 const authService = require('../services/authService');
 const emailService = require('../services/emailService');
-const { generateUniqueDisplayName, generateVerificationToken } = require('../utils/helpers');
+const { generateUniqueDisplayName, generateOTP } = require('../utils/helpers');
 
 // @desc    Register new user
 // @route   POST /api/auth/register
@@ -22,21 +22,21 @@ const register = async (req, res, next) => {
     // Generate unique display name
     const displayName = await generateUniqueDisplayName(User);
 
-    // Generate verification token
-    const verificationToken = generateVerificationToken();
-    const verificationTokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+    // Generate 6-digit OTP
+    const verificationOTP = generateOTP();
+    const verificationOTPExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
     // Create user
     const user = await User.create({
       email,
       password,
       displayName,
-      verificationToken,
-      verificationTokenExpiry
+      verificationOTP,
+      verificationOTPExpiry
     });
 
-    // Send verification email
-    await emailService.sendVerificationEmail(email, verificationToken);
+    // Send verification OTP email
+    await emailService.sendVerificationOTP(email, verificationOTP);
 
     // Generate JWT
     const token = authService.generateToken(user._id);
@@ -115,33 +115,110 @@ const login = async (req, res, next) => {
   }
 };
 
-// @desc    Verify email
-// @route   GET /api/auth/verify-email/:token
+// @desc    Verify email with OTP
+// @route   POST /api/auth/verify-email
 // @access  Public
 const verifyEmail = async (req, res, next) => {
   try {
-    const { token } = req.params;
+    const { email, otp } = req.body;
 
-    const user = await User.findOne({
-      verificationToken: token,
-      verificationTokenExpiry: { $gt: Date.now() }
-    });
-
-    if (!user) {
+    if (!email || !otp) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid or expired verification token'
+        message: 'Email and OTP are required'
       });
     }
 
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    if (user.isVerified) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email already verified'
+      });
+    }
+
+    // Check if OTP matches and is not expired
+    if (user.verificationOTP !== otp) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid OTP'
+      });
+    }
+
+    if (!user.verificationOTPExpiry || user.verificationOTPExpiry < new Date()) {
+      return res.status(400).json({
+        success: false,
+        message: 'OTP has expired. Please request a new one.'
+      });
+    }
+
+    // Verify user
     user.isVerified = true;
-    user.verificationToken = undefined;
-    user.verificationTokenExpiry = undefined;
+    user.verificationOTP = undefined;
+    user.verificationOTPExpiry = undefined;
     await user.save();
 
     res.json({
       success: true,
       message: 'Email verified successfully'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Resend verification OTP
+// @route   POST /api/auth/resend-otp
+// @access  Public
+const resendOTP = async (req, res, next) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email is required'
+      });
+    }
+
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    if (user.isVerified) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email already verified'
+      });
+    }
+
+    // Generate new OTP
+    const verificationOTP = generateOTP();
+    const verificationOTPExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    user.verificationOTP = verificationOTP;
+    user.verificationOTPExpiry = verificationOTPExpiry;
+    await user.save();
+
+    // Send new OTP
+    await emailService.sendVerificationOTP(email, verificationOTP);
+
+    res.json({
+      success: true,
+      message: 'OTP sent successfully. Please check your email.'
     });
   } catch (error) {
     next(error);
@@ -168,5 +245,6 @@ module.exports = {
   register,
   login,
   verifyEmail,
+  resendOTP,
   getMe
 };
