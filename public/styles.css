@@ -10,6 +10,8 @@ body {
     color: #333;
     min-height: 100vh;
     padding: 20px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
 .container {
@@ -31,6 +33,7 @@ header {
 header h1 {
     font-size: 2.5em;
     margin-bottom: 10px;
+    word-wrap: break-word;
 }
 
 header p {
@@ -43,6 +46,7 @@ header p {
     display: flex;
     gap: 10px;
     justify-content: center;
+    flex-wrap: wrap;
 }
 
 .status-bar {
@@ -53,6 +57,13 @@ header p {
     border-bottom: 1px solid #dee2e6;
     flex-wrap: wrap;
     gap: 15px;
+}
+
+@media (max-width: 768px) {
+    .status-bar {
+        padding: 12px 15px;
+        gap: 10px;
+    }
 }
 
 .status-item {
@@ -80,10 +91,22 @@ header p {
     background: #f8f9fa;
     border-bottom: 2px solid #dee2e6;
     overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+}
+
+.tabs::-webkit-scrollbar {
+    height: 4px;
+}
+
+.tabs::-webkit-scrollbar-thumb {
+    background: #667eea;
+    border-radius: 2px;
 }
 
 .tab {
     flex: 1;
+    min-width: 120px;
     padding: 15px 20px;
     border: none;
     background: transparent;
@@ -93,6 +116,7 @@ header p {
     color: #6c757d;
     transition: all 0.3s;
     white-space: nowrap;
+    touch-action: manipulation;
 }
 
 .tab:hover {
@@ -152,6 +176,15 @@ input, select, textarea {
     border-radius: 8px;
     font-size: 1em;
     transition: border-color 0.3s;
+    width: 100%;
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+input[type="email"],
+input[type="password"],
+input[type="text"] {
+    font-size: 16px; /* Prevents zoom on iOS */
 }
 
 input:focus, select:focus, textarea:focus {
@@ -176,6 +209,15 @@ textarea {
     text-decoration: none;
     display: inline-block;
     text-align: center;
+    width: 100%;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+}
+
+@media (min-width: 480px) {
+    .btn {
+        width: auto;
+    }
 }
 
 .btn-primary {
@@ -251,6 +293,12 @@ textarea {
     display: flex;
     gap: 10px;
     margin-bottom: 15px;
+    flex-wrap: wrap;
+}
+
+.response-controls .btn {
+    flex: 1;
+    min-width: 100px;
 }
 
 .response-box {
@@ -268,9 +316,16 @@ textarea {
 
 .video-container {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
     gap: 20px;
     margin-bottom: 20px;
+}
+
+@media (max-width: 480px) {
+    .video-container {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
 }
 
 .video-wrapper {
@@ -295,6 +350,11 @@ textarea {
     display: flex;
     gap: 10px;
     flex-wrap: wrap;
+}
+
+.video-controls .btn {
+    flex: 1;
+    min-width: 140px;
 }
 
 .log-container {
@@ -331,6 +391,7 @@ textarea {
     color: #48bb78;
 }
 
+/* Mobile Responsive Styles */
 @media (max-width: 768px) {
     body {
         padding: 10px;
@@ -338,26 +399,200 @@ textarea {
 
     .container {
         border-radius: 8px;
+        margin: 0;
     }
 
     header {
-        padding: 20px;
+        padding: 20px 15px;
     }
 
     header h1 {
         font-size: 1.8em;
+        line-height: 1.2;
+    }
+
+    header p {
+        font-size: 0.95em;
+    }
+
+    .header-actions {
+        flex-direction: column;
+        width: 100%;
+    }
+
+    .header-actions .btn {
+        width: 100%;
+    }
+
+    .status-bar {
+        flex-direction: column;
+        align-items: flex-start;
+        padding: 12px 15px;
+    }
+
+    .status-item {
+        width: 100%;
+        justify-content: space-between;
+        padding: 8px 0;
+        border-bottom: 1px solid #dee2e6;
+    }
+
+    .status-item:last-child {
+        border-bottom: none;
+    }
+
+    .tab {
+        padding: 12px 15px;
+        font-size: 0.9em;
+        min-width: 100px;
     }
 
     .tab-content {
         padding: 15px;
     }
 
+    .tab-content h2 {
+        font-size: 1.5em;
+        margin-bottom: 20px;
+    }
+
     .card {
+        padding: 15px;
+        margin-bottom: 15px;
+    }
+
+    .card h3 {
+        font-size: 1.1em;
+        margin-bottom: 15px;
+    }
+
+    .response-section {
         padding: 15px;
     }
 
+    .response-section h2 {
+        font-size: 1.3em;
+    }
+
+    .response-box {
+        font-size: 0.8em;
+        padding: 15px;
+        max-height: 300px;
+    }
+
+    .video-wrapper video {
+        height: 200px;
+    }
+
+    .log-container {
+        max-height: 250px;
+        font-size: 0.8em;
+        padding: 12px;
+    }
+
+    input, select, textarea {
+        padding: 14px 15px; /* Larger touch targets */
+    }
+
+    .btn {
+        padding: 14px 20px;
+        font-size: 0.95em;
+    }
+}
+
+/* Small Mobile Devices */
+@media (max-width: 480px) {
+    body {
+        padding: 5px;
+    }
+
+    header {
+        padding: 15px 10px;
+    }
+
+    header h1 {
+        font-size: 1.5em;
+    }
+
+    header p {
+        font-size: 0.85em;
+    }
+
+    .tab {
+        padding: 10px 12px;
+        font-size: 0.85em;
+        min-width: 90px;
+    }
+
+    .tab-content {
+        padding: 12px;
+    }
+
+    .tab-content h2 {
+        font-size: 1.3em;
+        margin-bottom: 15px;
+    }
+
+    .card {
+        padding: 12px;
+    }
+
+    .card h3 {
+        font-size: 1em;
+    }
+
     .status-bar {
+        padding: 10px 12px;
+    }
+
+    .status-label {
+        font-size: 0.9em;
+    }
+
+    .status-value {
+        font-size: 0.85em;
+        padding: 4px 10px;
+    }
+
+    .response-section {
+        padding: 12px;
+    }
+
+    .response-box {
+        font-size: 0.75em;
+        padding: 12px;
+        max-height: 250px;
+    }
+
+    .video-wrapper video {
+        height: 180px;
+    }
+
+    .video-controls {
         flex-direction: column;
-        align-items: flex-start;
+    }
+
+    .video-controls .btn {
+        width: 100%;
+    }
+
+    .log-container {
+        max-height: 200px;
+        font-size: 0.75em;
+    }
+}
+
+/* Tablet Styles */
+@media (min-width: 769px) and (max-width: 1024px) {
+    .container {
+        max-width: 95%;
+    }
+
+    .tab-content {
+        padding: 25px;
+    }
+
+    .video-container {
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
     }
 }
