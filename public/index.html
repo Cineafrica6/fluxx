@@ -189,14 +189,6 @@
             </div>
 
             <div class="card">
-                <h3>Matchmaking</h3>
-                <button onclick="joinQueue()" class="btn btn-success" id="joinQueueBtn" disabled>Join Queue</button>
-                <button onclick="leaveQueue()" class="btn btn-warning" id="leaveQueueBtn" disabled>Leave Queue</button>
-                <button onclick="nextMatch()" class="btn btn-primary" id="nextMatchBtn" disabled>Next Match</button>
-                <button onclick="endChat()" class="btn btn-danger" id="endChatBtn" disabled>End Chat</button>
-            </div>
-
-            <div class="card">
                 <h3>Video Chat</h3>
                 <div class="video-container">
                     <div class="video-wrapper">
@@ -209,9 +201,17 @@
                     </div>
                 </div>
                 <div class="video-controls">
-                    <button onclick="startLocalVideo()" class="btn btn-primary">Start Local Video</button>
-                    <button onclick="stopLocalVideo()" class="btn btn-danger">Stop Local Video</button>
+                    <button onclick="startVideo()" class="btn btn-success" id="startVideoBtn" disabled>Start Video</button>
+                    <button onclick="stopLocalVideo()" class="btn btn-danger">Stop Video</button>
+                    <button onclick="nextMatch()" class="btn btn-primary" id="nextMatchBtn" disabled>Next</button>
+                    <button onclick="endChat()" class="btn btn-secondary" id="endChatBtn" disabled>End Chat</button>
                 </div>
+            </div>
+
+            <div class="card">
+                <h3>Matchmaking (Debug)</h3>
+                <button onclick="joinQueue()" class="btn btn-success" id="joinQueueBtn" disabled>Join Queue</button>
+                <button onclick="leaveQueue()" class="btn btn-warning" id="leaveQueueBtn" disabled>Leave Queue</button>
             </div>
 
             <div class="card">

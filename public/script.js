@@ -41,6 +41,8 @@ window.addEventListener('DOMContentLoaded', () => {
     updateStatusBar();
     if (token) {
         getMe();
+        // Automatically connect socket when user is logged in
+        connectSocket();
     }
 });
 
@@ -337,6 +339,12 @@ function connectSocket() {
     socket.on('queue_joined', (data) => {
         logSocket(`Queue joined: ${data.message}`, 'info');
         document.getElementById('leaveQueueBtn').disabled = false;
+        // Update Start Video button if it exists
+        const startVideoBtn = document.getElementById('startVideoBtn');
+        if (startVideoBtn) {
+            startVideoBtn.textContent = 'Looking for someone...';
+            startVideoBtn.disabled = true;
+        }
     });
 
     socket.on('queue_left', (data) => {
@@ -350,6 +358,13 @@ function connectSocket() {
         document.getElementById('nextMatchBtn').disabled = false;
         document.getElementById('endChatBtn').disabled = false;
         
+        // Update Start Video button
+        const startVideoBtn = document.getElementById('startVideoBtn');
+        if (startVideoBtn) {
+            startVideoBtn.textContent = 'Video Active';
+            startVideoBtn.disabled = true;
+        }
+        
         // Start WebRTC
         await startWebRTC(true); // initiator
     });
@@ -357,6 +372,15 @@ function connectSocket() {
     socket.on('match_ended', (data) => {
         logSocket(`Match ended: ${data.reason}`, 'info');
         cleanupWebRTC();
+        
+        // Update Start Video button if rejoining queue
+        if (data.reason === 'next_clicked') {
+            const startVideoBtn = document.getElementById('startVideoBtn');
+            if (startVideoBtn) {
+                startVideoBtn.textContent = 'Looking for someone...';
+                startVideoBtn.disabled = true;
+            }
+        }
     });
 
     socket.on('partner_left', (data) => {
@@ -367,6 +391,12 @@ function connectSocket() {
     socket.on('partner_disconnected', (data) => {
         logSocket('Partner disconnected', 'error');
         cleanupWebRTC();
+        
+        // Automatically rejoin queue if autoRejoin flag is set
+        if (data.autoRejoin && socket && socket.connected) {
+            logSocket('Automatically rejoining queue...', 'info');
+            socket.emit('join_queue');
+        }
     });
 
     socket.on('banned', (data) => {
@@ -404,10 +434,20 @@ function updateSocketButtons(connected) {
     document.getElementById('disconnectBtn').disabled = !connected;
     document.getElementById('joinQueueBtn').disabled = !connected;
     
+    // Enable Start Video button when socket is connected
+    const startVideoBtn = document.getElementById('startVideoBtn');
+    if (startVideoBtn) {
+        startVideoBtn.disabled = !connected;
+    }
+    
     if (!connected) {
         document.getElementById('leaveQueueBtn').disabled = true;
         document.getElementById('nextMatchBtn').disabled = true;
         document.getElementById('endChatBtn').disabled = true;
+        if (startVideoBtn) {
+            startVideoBtn.textContent = 'Start Video';
+            startVideoBtn.disabled = true;
+        }
     }
 }
 
@@ -452,10 +492,45 @@ function endChat() {
         cleanupWebRTC();
         document.getElementById('nextMatchBtn').disabled = true;
         document.getElementById('endChatBtn').disabled = true;
+        
+        // Reset Start Video button
+        const startVideoBtn = document.getElementById('startVideoBtn');
+        if (startVideoBtn) {
+            startVideoBtn.textContent = 'Start Video';
+            startVideoBtn.disabled = false;
+        }
     }
 }
 
 // ========== Video Chat ==========
+// Start Video - automatically starts local video AND joins queue
+async function startVideo() {
+    if (!socket || !socket.connected) {
+        alert('Please wait for socket connection...');
+        return;
+    }
+    
+    try {
+        // Start local video first
+        await startLocalVideo();
+        
+        // Automatically join queue
+        if (socket && socket.connected) {
+            socket.emit('join_queue');
+            logSocket('Starting video and joining queue...', 'info');
+            
+            // Update button state
+            const startVideoBtn = document.getElementById('startVideoBtn');
+            if (startVideoBtn) {
+                startVideoBtn.disabled = true;
+                startVideoBtn.textContent = 'Looking for someone...';
+            }
+        }
+    } catch (error) {
+        logSocket(`Failed to start video: ${error.message}`, 'error');
+    }
+}
+
 async function startLocalVideo() {
     try {
         // If we already have a stream, stop it first

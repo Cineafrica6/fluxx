@@ -122,12 +122,27 @@ module.exports = (io, socket) => {
     if (matchEnded) {
       const { partnerId, roomId } = matchEnded;
       
-      // Notify partner
+      // Notify partner and automatically rejoin them to queue
       const partnerSocketId = matchmakingService.getSocketId(partnerId);
       if (partnerSocketId) {
-        io.to(partnerSocketId).emit('partner_disconnected', { 
-          message: 'Your partner disconnected' 
-        });
+        const partnerSocket = io.sockets.sockets.get(partnerSocketId);
+        if (partnerSocket) {
+          // Notify partner
+          partnerSocket.emit('partner_disconnected', { 
+            message: 'Your partner disconnected',
+            autoRejoin: true
+          });
+          
+          // Automatically rejoin partner to queue
+          const queueSize = matchmakingService.addToQueue(partnerId, partnerSocketId);
+          partnerSocket.emit('queue_joined', { 
+            position: queueSize,
+            message: 'Looking for next match...' 
+          });
+          
+          // Try to find new match
+          attemptMatch(io);
+        }
       }
     }
     

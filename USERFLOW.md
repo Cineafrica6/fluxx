@@ -92,47 +92,56 @@
 
    ## 2. Main Application Flow
 
-   ### 2.1 App Entry (After Login)
-   **Entry Point:** After successful login/verification
+### 2.1 App Entry (After Login)
+**Entry Point:** After successful login/verification
 
-   **Initial State:**
-   - User is authenticated
-   - Token stored in localStorage
-   - User profile loaded
-   - Socket connection established (if needed)
+**Initial State:**
+- User is authenticated
+- Token stored in localStorage
+- User profile loaded
+- **Socket connection automatically established** (no manual connect button)
+- User is ready to start chatting
 
-   **UI Shows:**
-   - Main video chat interface
-   - User's display name/avatar
-   - "Start Chat" or "Join Queue" button
-   - Settings/Profile menu
-   - Logout option
+**UI Shows:**
+- Main video chat interface
+- User's display name/avatar
+- "Start Video" or "Start Chat" button (primary action)
+- Settings/Profile menu
+- Logout option
+
+**Note:** WebSocket connection happens automatically in the background - users never see a "Connect Socket" button
 
    ---
 
    ### 2.2 Matchmaking Flow
 
-   #### 2.2.1 Joining Queue
-   **Steps:**
-   1. User clicks "Start Chat" or "Join Queue" button
-   2. **Backend:** Validates user (not banned, verified)
-   3. **UI State:**
-      - Show loading state
-      - Button changes to "Looking for match..."
-      - Show queue status: "Searching for someone to chat with..."
-      - Disable "Start Chat" button
-      - Show "Leave Queue" button
-   4. **Backend:** Adds user to matchmaking queue
-   5. **Backend:** When 2+ users in queue, matches them randomly
-   6. **UI State:** 
-      - Show "Match found!" message
-      - Transition to video chat screen
+#### 2.2.1 Starting Video Chat (Automatic Pairing)
+**Steps:**
+1. User clicks "Start Video" button
+2. **Backend:** 
+   - Validates user (not banned, verified)
+   - Automatically adds user to matchmaking queue
+3. **UI State:**
+   - Show loading state
+   - Button changes to "Looking for someone..."
+   - Show status: "Searching for a match..."
+   - Disable "Start Video" button
+   - Show "Cancel" button (to leave queue)
+   - Request camera/microphone permissions (if not already granted)
+4. **Backend:** When 2+ users in queue, matches them randomly
+5. **UI State:** 
+   - Show "Match found!" animation/message
+   - Automatically start local video feed
+   - Transition to video chat screen
+   - Initialize WebRTC connection automatically
+   - Show both local and remote video feeds
 
-   **UI Elements:**
-   - "Start Chat" / "Join Queue" button
-   - Queue status indicator
-   - "Leave Queue" button
-   - Loading spinner/animation
+**UI Elements:**
+- "Start Video" button (primary, large, prominent)
+- Queue status: "Searching for someone to chat with..."
+- "Cancel" button (to leave queue)
+- Loading spinner/animation
+- Permission request overlay (if needed)
 
    ---
 
@@ -158,59 +167,69 @@
 
    ### 2.3 Video Chat Flow
 
-   #### 2.3.1 Video Chat Active State
-   **UI Layout:**
-   ```
-   ┌─────────────────────────────────┐
-   │  [Local Video] (small, corner)  │
-   │                                 │
-   │    [Remote Video] (large)       │
-   │                                 │
-   │  [Controls: Mute | Video | ...] │
-   │  [Next] [End Chat]              │
-   └─────────────────────────────────┘
-   ```
+#### 2.3.1 Video Chat Active State
+**UI Layout:**
+```
+┌─────────────────────────────────┐
+│  [Local Video] (small, corner)  │
+│                                 │
+│    [Remote Video] (large)       │
+│                                 │
+│  [Controls: Mute | Video | ...] │
+│  [Next] [End Chat]              │
+└─────────────────────────────────┘
+```
 
-   **User Actions Available:**
-   1. **Toggle Microphone:**
-      - Click mute/unmute button
-      - Icon changes (mic on/off)
-      - Local video shows mute indicator
+**User Actions Available:**
+1. **Toggle Microphone:**
+   - Click mute/unmute button
+   - Icon changes (mic on/off)
+   - Local video shows mute indicator
+   - **Automatic:** Changes apply immediately, no reconnection needed
 
-   2. **Toggle Video:**
-      - Click video on/off button
-      - Camera stops/starts
-      - Remote peer sees black screen or "Video paused" message
+2. **Toggle Video:**
+   - Click video on/off button
+   - Camera stops/starts
+   - Remote peer sees black screen or "Video paused" message
+   - **Automatic:** Changes apply immediately via track replacement
 
-   3. **Next Match:**
-      - Click "Next" button
-      - Current chat ends
-      - Automatically rejoins queue
-      - Shows "Looking for next match..."
+3. **Next Match (Primary Action):**
+   - Click "Next" button (prominent, easy to access)
+   - Current chat ends smoothly
+   - **Automatically rejoins queue** (no manual action needed)
+   - Shows "Looking for next match..."
+   - Local video continues
+   - When new match found, automatically connects
 
-   4. **End Chat:**
-      - Click "End Chat" button
-      - Chat ends completely
-      - Returns to main screen
-      - User must manually join queue again
+4. **End Chat:**
+   - Click "End Chat" button (secondary action)
+   - Chat ends completely
+   - Returns to main screen
+   - User must click "Start Video" again to find new match
 
-   5. **Report User:**
-      - Click "Report" button (usually in menu)
-      - Opens report modal
-      - Select reason (inappropriate content, harassment, etc.)
-      - Add optional details
-      - Submit report
-      - Chat may end if user gets banned
+5. **Report User:**
+   - Click "Report" button (usually in menu or overlay)
+   - Opens report modal
+   - Select reason (inappropriate content, harassment, etc.)
+   - Add optional details
+   - Submit report
+   - Chat may end if user gets banned
+   - Option to find next match after reporting
 
-   **UI Elements:**
-   - Local video feed (preview)
-   - Remote video feed (main)
-   - Mute/unmute button
-   - Video on/off button
-   - "Next" button
-   - "End Chat" button
-   - "Report" button (in menu)
-   - Connection status indicator
+**UI Elements:**
+- Local video feed (preview, corner)
+- Remote video feed (main, center)
+- Mute/unmute button (prominent)
+- Video on/off button (prominent)
+- **"Next" button** (large, prominent, primary action)
+- "End Chat" button (secondary, smaller)
+- "Report" button (in menu/overlay)
+- Connection status indicator
+
+**Key UX Principles:**
+- **"Next" is the primary action** - users will use this most often
+- **Everything is automatic** - no manual WebSocket connection, automatic reconnection, automatic queue rejoining
+- **Smooth transitions** - no jarring stops, smooth flow between matches
 
    ---
 
@@ -241,16 +260,32 @@
 
    ### 2.4 Chat End Scenarios
 
-   #### 2.4.1 User Clicks "Next"
-   **Flow:**
-   1. User clicks "Next" button
-   2. **Backend:** Ends current match
-   3. **UI State:**
-      - Show "Looking for next match..."
-      - Automatically rejoins queue
-      - Local video continues
-      - Remote video stops
-   4. When new match found, repeat match found flow
+#### 2.4.1 User Clicks "Next" (Primary Action)
+**Flow:**
+1. User clicks "Next" button
+2. **Backend:** 
+   - Ends current match
+   - Automatically removes user from current match
+   - Automatically adds user back to queue
+3. **UI State:**
+   - Smooth transition animation
+   - Show "Looking for next match..." message
+   - **Automatically keeps user in queue** (no manual action)
+   - Local video continues (user can still see themselves)
+   - Remote video fades out
+   - Show queue status: "Searching..."
+4. **Backend:** When new match found (automatically)
+5. **UI State:**
+   - Show "Match found!" animation
+   - Automatically connect to new partner
+   - Remote video fades in
+   - Continue chatting seamlessly
+
+**Key Points:**
+- **Fully automatic** - user clicks "Next" and everything happens automatically
+- **No manual queue rejoining** - happens in background
+- **Smooth experience** - feels like continuous flow
+- **Local video persists** - user always sees themselves
 
    ---
 
@@ -266,17 +301,22 @@
 
    ---
 
-   #### 2.4.3 Partner Disconnects
-   **Flow:**
-   1. Partner leaves or disconnects
-   2. **Backend:** Detects disconnect, ends match
-   3. **UI State:**
-      - Show "Partner disconnected" message
-      - Remote video stops
-      - Show options:
-      - "Find New Match" (rejoin queue)
-      - "Return Home"
-   4. User can choose to rejoin queue or go back
+#### 2.4.3 Partner Disconnects
+**Flow:**
+1. Partner leaves, disconnects, or clicks "Next"
+2. **Backend:** Detects disconnect, ends match
+3. **UI State:**
+   - Show "Partner left" or "Partner disconnected" message
+   - Remote video stops/fades out
+   - **Automatically rejoin queue** (default behavior)
+   - Show "Looking for next match..." automatically
+   - Local video continues
+4. When new match found, automatically connect (same as "Next" flow)
+
+**Key Points:**
+- **Automatic recovery** - no manual action needed
+- **Seamless experience** - user doesn't have to click anything
+- **Option to cancel** - user can still click "End Chat" if they want to stop completely
 
    ---
 
@@ -410,20 +450,24 @@
 
    ---
 
-   ## 7. Key User Interactions
+## 7. Key User Interactions
 
-   ### 7.1 Primary Actions
-   1. **Start Chat** → Join queue → Match found → Video chat
-   2. **Next Match** → End current → Rejoin queue → New match
-   3. **End Chat** → Return to main screen
-   4. **Report User** → Submit report → Continue or end chat
-   5. **Toggle Audio/Video** → Immediate feedback
+### 7.1 Primary Actions (Most Common)
+1. **Start Video** → Automatically join queue → Match found → Video chat starts
+2. **Next** → End current match → **Automatically rejoin queue** → New match found → Continue
+3. **Toggle Audio/Video** → Immediate feedback, no reconnection needed
 
-   ### 7.2 Secondary Actions
-   1. **Leave Queue** → Return to idle state
-   2. **View Profile** → See account info
-   3. **Settings** → Adjust preferences
-   4. **Logout** → Return to login screen
+### 7.2 Secondary Actions (Less Common)
+1. **End Chat** → Exit completely → Return to main screen
+2. **Report User** → Submit report → Option to continue or end
+3. **Cancel** (while in queue) → Leave queue → Return to idle state
+
+### 7.3 Automatic Behaviors (No User Action Required)
+1. **WebSocket Connection** → Automatically connects on app load
+2. **Queue Rejoining** → Automatically happens when clicking "Next"
+3. **Match Connection** → Automatically connects when match found
+4. **Reconnection** → Automatically reconnects if connection lost
+5. **Permission Requests** → Automatically requested when starting video
 
    ---
 
@@ -488,25 +532,42 @@
 
    ## 11. Screen Flow Diagram
 
-   ```
-   [Landing/Login]
-      ↓
-   [Registration] → [OTP Verification] → [Main App]
-      ↓                                    ↓
-   [Login] ───────────────────────────→ [Main App]
-                                          ↓
-                                 [Start Chat / Join Queue]
-                                          ↓
-                                 [Match Found / Video Chat]
-                                          ↓
-                     ┌───────────────────┴───────────────────┐
-                     ↓                                       ↓
-               [Next Match]                            [End Chat]
-                     ↓                                       ↓
-               [Rejoin Queue]                          [Main App]
-                     ↓
-               [New Match Found]
-   ```
+```
+[Landing/Login]
+    ↓
+[Registration] → [OTP Verification] → [Main App] (Socket Auto-Connected)
+    ↓                                    ↓
+[Login] ───────────────────────────→ [Main App] (Socket Auto-Connected)
+                                        ↓
+                              [Click "Start Video"]
+                                        ↓
+                        [Auto-Join Queue / Searching...]
+                                        ↓
+                              [Match Found! Auto-Connect]
+                                        ↓
+                              [Video Chat Active]
+                                        ↓
+                    ┌───────────────────┴───────────────────┐
+                    ↓                                       ↓
+        [Click "Next"] (Primary)              [Click "End Chat"]
+                    ↓                                       ↓
+        [Auto-End Match]                      [Exit Completely]
+                    ↓                                       ↓
+        [Auto-Rejoin Queue]                          [Main App]
+                    ↓
+        [Auto-Searching...]
+                    ↓
+        [New Match Found! Auto-Connect]
+                    ↓
+        [Video Chat Active] (Loop continues)
+```
+
+**Key Flow Points:**
+- Socket connection is **automatic** (happens on app load)
+- Queue joining is **automatic** (happens when clicking "Start Video")
+- Queue rejoining is **automatic** (happens when clicking "Next")
+- WebRTC connection is **automatic** (happens when match found)
+- User only needs to click: "Start Video" → "Next" → "Next" → etc.
 
    ---
 
@@ -543,34 +604,48 @@
 
    ---
 
-   ## 13. State Management Considerations
+## 13. State Management Considerations
 
-   ### 13.1 Global State Needed
-   - **Auth State:**
-   - isAuthenticated
-   - user (profile data)
-   - token
-   - isVerified
+### 13.1 Global State Needed
+- **Auth State:**
+  - isAuthenticated
+  - user (profile data)
+  - token
+  - isVerified
 
-   - **Matchmaking State:**
-   - inQueue
-   - queuePosition
-   - isMatched
-   - currentMatch (roomId, partnerId)
+- **Socket State:**
+  - isSocketConnected (automatic, user never sees this)
+  - socketInstance
 
-   - **Video Chat State:**
-   - isConnected
-   - localStream
-   - remoteStream
-   - isMuted
-   - isVideoOn
-   - connectionStatus
+- **Matchmaking State:**
+  - inQueue (automatic when user clicks "Start Video")
+  - queuePosition
+  - isMatched
+  - currentMatch (roomId, partnerId)
+  - autoRejoinEnabled (true by default)
 
-   - **UI State:**
-   - currentScreen
-   - isLoading
-   - errorMessage
-   - showReportModal
+- **Video Chat State:**
+  - isConnected
+  - localStream
+  - remoteStream
+  - isMuted
+  - isVideoOn
+  - connectionStatus
+  - isConnecting
+
+- **UI State:**
+  - currentScreen
+  - isLoading
+  - errorMessage
+  - showReportModal
+  - queueStatus ("idle" | "searching" | "matched" | "connecting")
+
+### 13.2 Automatic State Transitions
+- **App Load** → Auto-connect socket → Ready state
+- **Start Video** → Auto-join queue → Searching state
+- **Match Found** → Auto-connect WebRTC → Chatting state
+- **Click Next** → Auto-end match → Auto-rejoin queue → Searching state → Match Found → Chatting state
+- **Partner Leaves** → Auto-rejoin queue → Searching state → Match Found → Chatting state
 
    ---
 
