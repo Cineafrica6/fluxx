@@ -49,6 +49,7 @@
             <div class="card">
                 <h3>Register New User</h3>
                 <form onsubmit="register(event)">
+                    <input type="text" id="registerUsername" placeholder="Username (3-20 chars, letters, numbers, _ -)" required minlength="3" maxlength="20" pattern="[a-zA-Z0-9][a-zA-Z0-9_-]*[a-zA-Z0-9]|[a-zA-Z0-9]{1,2}">
                     <input type="email" id="registerEmail" placeholder="Email (e.g., student@university.edu)" required>
                     <input type="password" id="registerPassword" placeholder="Password (min 6 chars)" required>
                     <button type="submit" class="btn btn-primary">Register</button>

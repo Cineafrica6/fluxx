@@ -17,9 +17,17 @@ const { protect } = require('../middleware/auth');
  *           schema:
  *             type: object
  *             required:
+ *               - displayName
  *               - email
  *               - password
  *             properties:
+ *               displayName:
+ *                 type: string
+ *                 minLength: 3
+ *                 maxLength: 20
+ *                 pattern: '^[a-zA-Z0-9][a-zA-Z0-9_-]*[a-zA-Z0-9]$|^[a-zA-Z0-9]{1,2}$'
+ *                 description: Username (3-20 characters, alphanumeric, underscores, hyphens. Cannot start/end with _ or -)
+ *                 example: johndoe123
  *               email:
  *                 type: string
  *                 format: email
@@ -27,6 +35,7 @@ const { protect } = require('../middleware/auth');
  *               password:
  *                 type: string
  *                 format: password
+ *                 minLength: 6
  *                 example: password123
  *     responses:
  *       201:
@@ -41,6 +50,7 @@ const { protect } = require('../middleware/auth');
  *                   example: true
  *                 message:
  *                   type: string
+ *                   example: Registration successful. Please verify your account with the OTP.
  *                 data:
  *                   type: object
  *                   properties:
@@ -48,12 +58,29 @@ const { protect } = require('../middleware/auth');
  *                       $ref: '#/components/schemas/User'
  *                     token:
  *                       type: string
+ *                       description: JWT authentication token
+ *                     otp:
+ *                       type: string
+ *                       description: 6-digit OTP for email verification (testing only)
  *       400:
- *         description: Bad request
+ *         description: Bad request (validation error, username taken, or email already exists)
  *         content:
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/Error'
+ *             examples:
+ *               usernameTaken:
+ *                 value:
+ *                   success: false
+ *                   message: Username is already taken
+ *               emailExists:
+ *                 value:
+ *                   success: false
+ *                   message: User already exists with this email
+ *               validationError:
+ *                 value:
+ *                   success: false
+ *                   message: Username must be between 3 and 20 characters
  */
 router.post('/register', registerValidation, register);
 

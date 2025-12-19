@@ -127,10 +127,11 @@ function clearAllData() {
 // ========== Authentication ==========
 async function register(event) {
     event.preventDefault();
+    const displayName = document.getElementById('registerUsername').value.trim();
     const email = document.getElementById('registerEmail').value;
     const password = document.getElementById('registerPassword').value;
 
-    const result = await apiRequest('/api/auth/register', 'POST', { email, password });
+    const result = await apiRequest('/api/auth/register', 'POST', { displayName, email, password });
     
     if (result.ok) {
         token = result.data.data.token;

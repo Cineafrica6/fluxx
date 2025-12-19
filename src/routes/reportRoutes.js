@@ -1,15 +1,17 @@
 const express = require('express');
 const router = express.Router();
-const { register, login, verifyEmail, getMe } = require('../controllers/authController');
-const { registerValidation, loginValidation } = require('../middleware/validation');
+const { submitReport, getMyReportStats } = require('../controllers/reportController');
+const { reportValidation } = require('../middleware/validation');
 const { protect } = require('../middleware/auth');
 
 /**
  * @swagger
- * /api/auth/register:
+ * /api/reports:
  *   post:
- *     summary: Register a new user
- *     tags: [Authentication]
+ *     summary: Submit a report against a user
+ *     tags: [Reports]
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -17,20 +19,25 @@ const { protect } = require('../middleware/auth');
  *           schema:
  *             type: object
  *             required:
- *               - email
- *               - password
+ *               - reportedUserId
+ *               - reason
  *             properties:
- *               email:
+ *               reportedUserId:
  *                 type: string
- *                 format: email
- *                 example: student@university.edu
- *               password:
+ *                 description: ID of the user being reported
+ *                 example: "507f1f77bcf86cd799439011"
+ *               reason:
  *                 type: string
- *                 format: password
- *                 example: password123
+ *                 enum: [inappropriate_content, harassment, nudity, spam, other]
+ *                 description: Reason for the report
+ *                 example: "inappropriate_content"
+ *               additionalDetails:
+ *                 type: string
+ *                 description: Optional additional details about the report
+ *                 example: "User showed inappropriate content during video chat"
  *     responses:
  *       201:
- *         description: User registered successfully
+ *         description: Report submitted successfully
  *         content:
  *           application/json:
  *             schema:
@@ -41,97 +48,38 @@ const { protect } = require('../middleware/auth');
  *                   example: true
  *                 message:
  *                   type: string
+ *                   example: "Report submitted successfully"
  *                 data:
  *                   type: object
  *                   properties:
- *                     user:
- *                       $ref: '#/components/schemas/User'
- *                     token:
- *                       type: string
+ *                     userBanned:
+ *                       type: boolean
+ *                       description: Whether the reported user was automatically banned
+ *                     reportCount:
+ *                       type: number
+ *                       description: Total reports against the user
  *       400:
- *         description: Bad request
+ *         description: Bad request (cannot report yourself, validation error)
  *         content:
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/Error'
- */
-router.post('/register', registerValidation, register);
-
-/**
- * @swagger
- * /api/auth/login:
- *   post:
- *     summary: Login user
- *     tags: [Authentication]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - email
- *               - password
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *               password:
- *                 type: string
- *                 format: password
- *     responses:
- *       200:
- *         description: Login successful
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 data:
- *                   type: object
- *                   properties:
- *                     user:
- *                       $ref: '#/components/schemas/User'
- *                     token:
- *                       type: string
  *       401:
- *         description: Invalid credentials
+ *         description: Not authorized
  */
-router.post('/login', loginValidation, login);
+router.post('/', protect, reportValidation, submitReport);
 
 /**
  * @swagger
- * /api/auth/verify-email/{token}:
+ * /api/reports/me:
  *   get:
- *     summary: Verify email with token
- *     tags: [Authentication]
- *     parameters:
- *       - in: path
- *         name: token
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: Email verified successfully
- *       400:
- *         description: Invalid or expired token
- */
-router.get('/verify-email/:token', verifyEmail);
-
-/**
- * @swagger
- * /api/auth/me:
- *   get:
- *     summary: Get current user
- *     tags: [Authentication]
+ *     summary: Get current user's report statistics
+ *     tags: [Reports]
  *     security:
  *       - bearerAuth: []
  *     responses:
  *       200:
- *         description: Current user data
+ *         description: Report statistics for current user
  *         content:
  *           application/json:
  *             schema:
@@ -139,11 +87,22 @@ router.get('/verify-email/:token', verifyEmail);
  *               properties:
  *                 success:
  *                   type: boolean
+ *                   example: true
  *                 data:
- *                   $ref: '#/components/schemas/User'
+ *                   type: object
+ *                   properties:
+ *                     reportCount:
+ *                       type: number
+ *                       description: Total number of reports received
+ *                     reportsLast24h:
+ *                       type: number
+ *                       description: Number of reports in the last 24 hours
+ *                     isBanned:
+ *                       type: boolean
+ *                       description: Whether the user is currently banned
  *       401:
  *         description: Not authorized
  */
-router.get('/me', protect, getMe);
+router.get('/me', protect, getMyReportStats);
 
 module.exports = router;

@@ -34,14 +34,68 @@ const swaggerOptions = {
         User: {
           type: 'object',
           properties: {
-            id: { type: 'string' },
-            email: { type: 'string', format: 'email' },
-            displayName: { type: 'string' },
-            isVerified: { type: 'boolean' },
-            isAdmin: { type: 'boolean' },
-            reportCount: { type: 'number' },
-            isBanned: { type: 'boolean' },
-            createdAt: { type: 'string', format: 'date-time' }
+            id: { 
+              type: 'string',
+              description: 'User ID'
+            },
+            email: { 
+              type: 'string', 
+              format: 'email',
+              description: 'User email address'
+            },
+            displayName: { 
+              type: 'string',
+              minLength: 3,
+              maxLength: 20,
+              description: 'Username (3-20 characters, alphanumeric, underscores, hyphens)',
+              example: 'johndoe123'
+            },
+            isVerified: { 
+              type: 'boolean',
+              description: 'Whether the user has verified their email'
+            },
+            isAdmin: { 
+              type: 'boolean',
+              description: 'Whether the user has admin privileges'
+            },
+            reportCount: { 
+              type: 'number',
+              description: 'Total number of reports received'
+            },
+            isBanned: { 
+              type: 'boolean',
+              description: 'Whether the user is currently banned'
+            },
+            createdAt: { 
+              type: 'string', 
+              format: 'date-time',
+              description: 'Account creation timestamp'
+            }
+          }
+        },
+        RegisterRequest: {
+          type: 'object',
+          required: ['displayName', 'email', 'password'],
+          properties: {
+            displayName: {
+              type: 'string',
+              minLength: 3,
+              maxLength: 20,
+              pattern: '^[a-zA-Z0-9][a-zA-Z0-9_-]*[a-zA-Z0-9]$|^[a-zA-Z0-9]{1,2}$',
+              description: 'Username (3-20 characters, alphanumeric, underscores, hyphens. Cannot start/end with _ or -)',
+              example: 'johndoe123'
+            },
+            email: {
+              type: 'string',
+              format: 'email',
+              example: 'student@university.edu'
+            },
+            password: {
+              type: 'string',
+              format: 'password',
+              minLength: 6,
+              example: 'password123'
+            }
           }
         },
         Report: {
@@ -68,10 +122,32 @@ const swaggerOptions = {
             message: { type: 'string' }
           }
         }
-      }
+      },
+      tags: [
+        {
+          name: 'Authentication',
+          description: 'User authentication endpoints'
+        },
+        {
+          name: 'Users',
+          description: 'User profile endpoints'
+        },
+        {
+          name: 'Reports',
+          description: 'User reporting endpoints'
+        },
+        {
+          name: 'Admin',
+          description: 'Admin-only endpoints'
+        },
+        {
+          name: 'Socket.IO',
+          description: 'Real-time WebSocket events for video chat and matchmaking'
+        }
+      ]
     }
   },
-  apis: ['./src/routes/*.js', './src/controllers/*.js']
+  apis: ['./src/routes/*.js', './src/controllers/*.js', './src/routes/socketRoutes.js']
 };
 
 const swaggerSpec = swaggerJsDoc(swaggerOptions);

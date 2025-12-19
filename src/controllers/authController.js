@@ -1,26 +1,43 @@
 const User = require('../models/User');
 const authService = require('../services/authService');
 const emailService = require('../services/emailService');
-const { generateUniqueDisplayName, generateOTP } = require('../utils/helpers');
+const { generateOTP, validateUsername } = require('../utils/helpers');
 
 // @desc    Register new user
 // @route   POST /api/auth/register
 // @access  Public
 const register = async (req, res, next) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, displayName } = req.body;
 
-    // Check if user exists
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
+    // Validate username format
+    const usernameValidation = validateUsername(displayName);
+    if (!usernameValidation.valid) {
+      return res.status(400).json({
+        success: false,
+        message: usernameValidation.error
+      });
+    }
+
+    const normalizedUsername = usernameValidation.normalized;
+
+    // Check if user exists with email
+    const existingUserByEmail = await User.findOne({ email });
+    if (existingUserByEmail) {
       return res.status(400).json({
         success: false,
         message: 'User already exists with this email'
       });
     }
 
-    // Generate unique display name
-    const displayName = await generateUniqueDisplayName(User);
+    // Check if username is already taken
+    const existingUserByUsername = await User.findOne({ displayName: normalizedUsername });
+    if (existingUserByUsername) {
+      return res.status(400).json({
+        success: false,
+        message: 'Username is already taken'
+      });
+    }
 
     // Generate 6-digit OTP
     const verificationOTP = generateOTP();
@@ -30,7 +47,7 @@ const register = async (req, res, next) => {
     const user = await User.create({
       email,
       password,
-      displayName,
+      displayName: normalizedUsername,
       verificationOTP,
       verificationOTPExpiry
     });
