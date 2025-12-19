@@ -3,12 +3,28 @@ const logger = require('../utils/logger');
 
 class EmailService {
   constructor() {
+    // Check if Railway is blocking SMTP (Free/Trial/Hobby plans)
+    const isRailwayFreeTier = process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID;
+    
     // Initialize Gmail SMTP transporter
     if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+      // Railway Free/Trial/Hobby plans block SMTP - emails will fail
+      if (isRailwayFreeTier && process.env.NODE_ENV === 'production') {
+        logger.warn('⚠️ Railway Free/Trial/Hobby plans block SMTP connections');
+        logger.warn('⚠️ Email sending will fail. OTP will be logged and returned in API response.');
+        logger.warn('💡 Solutions:');
+        logger.warn('   1. Upgrade Railway to Pro plan ($20/month)');
+        logger.warn('   2. Use a different hosting provider (Render, Fly.io, etc.)');
+        logger.warn('   3. Use an email API service (requires domain verification)');
+        logger.warn('   4. Check Railway logs for OTP codes');
+        this.transporter = null; // Don't even try on Railway free tier
+        return;
+      }
+      
       // Try multiple configurations for Railway compatibility
-      // Railway often blocks port 587, so we'll try 465 (SSL) first
+      // Railway Pro plan allows SMTP, but we'll try 465 (SSL) first
       const configs = [
-        // Configuration 1: Port 465 with SSL (most reliable for Railway)
+        // Configuration 1: Port 465 with SSL (most reliable)
         {
           service: 'gmail',
           host: 'smtp.gmail.com',

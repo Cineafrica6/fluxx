@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { register, login, verifyEmail, resendOTP, getMe } = require('../controllers/authController');
+const { register, login, getMe } = require('../controllers/authController');
 const { registerValidation, loginValidation } = require('../middleware/validation');
 const { protect } = require('../middleware/auth');
 
@@ -50,7 +50,7 @@ const { protect } = require('../middleware/auth');
  *                   example: true
  *                 message:
  *                   type: string
- *                   example: Registration successful. Please verify your account with the OTP.
+ *                   example: Registration successful. Your account is ready to use.
  *                 data:
  *                   type: object
  *                   properties:
@@ -59,9 +59,6 @@ const { protect } = require('../middleware/auth');
  *                     token:
  *                       type: string
  *                       description: JWT authentication token
- *                     otp:
- *                       type: string
- *                       description: 6-digit OTP for email verification (testing only)
  *       400:
  *         description: Bad request (validation error, username taken, or email already exists)
  *         content:
@@ -127,62 +124,6 @@ router.post('/register', registerValidation, register);
  *         description: Invalid credentials
  */
 router.post('/login', loginValidation, login);
-
-/**
- * @swagger
- * /api/auth/verify-email:
- *   post:
- *     summary: Verify email with OTP
- *     tags: [Authentication]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - email
- *               - otp
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *               otp:
- *                 type: string
- *                 example: "123456"
- *     responses:
- *       200:
- *         description: Email verified successfully
- *       400:
- *         description: Invalid or expired OTP
- */
-router.post('/verify-email', verifyEmail);
-
-/**
- * @swagger
- * /api/auth/resend-otp:
- *   post:
- *     summary: Resend verification OTP
- *     tags: [Authentication]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - email
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *     responses:
- *       200:
- *         description: OTP sent successfully
- *       400:
- *         description: Email already verified or invalid request
- */
-router.post('/resend-otp', resendOTP);
 
 /**
  * @swagger

@@ -27,10 +27,8 @@ const userSchema = new mongoose.Schema({
   },
   isVerified: {
     type: Boolean,
-    default: false
+    default: true // Auto-verify users on registration
   },
-  verificationOTP: String,
-  verificationOTPExpiry: Date,
   
   // Moderation
   reportCount: {
