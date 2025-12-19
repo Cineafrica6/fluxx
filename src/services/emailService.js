@@ -5,36 +5,67 @@ class EmailService {
   constructor() {
     // Initialize Gmail SMTP transporter
     if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
-      this.transporter = nodemailer.createTransport({
-        service: 'gmail',
-        host: 'smtp.gmail.com',
-        port: 587,
-        secure: false, // true for 465, false for other ports
-        auth: {
-          user: process.env.EMAIL_USER,
-          pass: process.env.EMAIL_PASS // Gmail app password
+      // Try multiple configurations for Railway compatibility
+      // Railway often blocks port 587, so we'll try 465 (SSL) first
+      const configs = [
+        // Configuration 1: Port 465 with SSL (most reliable for Railway)
+        {
+          service: 'gmail',
+          host: 'smtp.gmail.com',
+          port: 465,
+          secure: true, // SSL
+          auth: {
+            user: process.env.EMAIL_USER,
+            pass: process.env.EMAIL_PASS
+          },
+          tls: {
+            rejectUnauthorized: false
+          },
+          connectionTimeout: 30000, // 30 seconds
+          greetingTimeout: 30000,
+          socketTimeout: 30000
         },
-        // Additional options for better reliability
-        tls: {
-          rejectUnauthorized: false // Allow self-signed certificates (for Railway/production)
-        },
-        // Connection timeout
-        connectionTimeout: 10000, // 10 seconds
-        // Greeting timeout
-        greetingTimeout: 10000,
-        // Socket timeout
-        socketTimeout: 10000
-      });
+        // Configuration 2: Port 587 with STARTTLS (fallback)
+        {
+          service: 'gmail',
+          host: 'smtp.gmail.com',
+          port: 587,
+          secure: false, // STARTTLS
+          auth: {
+            user: process.env.EMAIL_USER,
+            pass: process.env.EMAIL_PASS
+          },
+          tls: {
+            rejectUnauthorized: false
+          },
+          connectionTimeout: 30000,
+          greetingTimeout: 30000,
+          socketTimeout: 30000
+        }
+      ];
       
-      // Verify connection with retry logic
-      this.verifyConnection();
+      // Try to create transporter with first config, fallback to second
+      this.transporter = this.createTransporterWithFallback(configs);
+      
+      // Verify connection with retry logic (async, don't block)
+      this.verifyConnection().catch(err => {
+        logger.warn('Email verification will retry on first send');
+      });
     } else {
       logger.warn('⚠️ Email service not configured. Set EMAIL_USER and EMAIL_PASS in .env');
       this.transporter = null;
     }
   }
 
-  async verifyConnection(retries = 3) {
+  createTransporterWithFallback(configs) {
+    // Start with the first config (port 465 with SSL - best for Railway)
+    const config = configs[0];
+    logger.info(`Attempting email connection with port ${config.port} (${config.secure ? 'SSL' : 'STARTTLS'})...`);
+    
+    return nodemailer.createTransport(config);
+  }
+
+  async verifyConnection(retries = 2) {
     if (!this.transporter) return;
     
     for (let i = 0; i < retries; i++) {
@@ -43,20 +74,49 @@ class EmailService {
         logger.success('✅ Email service ready (Gmail SMTP)');
         return true;
       } catch (error) {
-        logger.error(`Email service verification attempt ${i + 1}/${retries} failed:`, error.message);
+        logger.warn(`Email service verification attempt ${i + 1}/${retries} failed:`, error.message);
+        
+        // If connection timeout, try recreating with different config
+        if (error.message.includes('timeout') || error.message.includes('ETIMEDOUT')) {
+          logger.warn('Connection timeout detected. This is common on Railway.');
+          logger.warn('Email will still be attempted on send, but may fail if Railway blocks SMTP.');
+          
+          // Try alternative configuration
+          if (i === 0 && process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+            logger.info('Attempting alternative SMTP configuration...');
+            try {
+              // Try port 587 as fallback
+              this.transporter = nodemailer.createTransport({
+                service: 'gmail',
+                host: 'smtp.gmail.com',
+                port: 587,
+                secure: false,
+                auth: {
+                  user: process.env.EMAIL_USER,
+                  pass: process.env.EMAIL_PASS
+                },
+                tls: {
+                  rejectUnauthorized: false
+                },
+                connectionTimeout: 30000,
+                greetingTimeout: 30000,
+                socketTimeout: 30000
+              });
+              logger.info('Switched to port 587 configuration');
+            } catch (configError) {
+              logger.error('Failed to switch configuration:', configError.message);
+            }
+          }
+        }
         
         if (i === retries - 1) {
-          logger.error('❌ Email service verification failed after all retries');
-          logger.error('Please check:');
-          logger.error('1. EMAIL_USER and EMAIL_PASS are set correctly in Railway environment variables');
-          logger.error('2. Gmail app password is valid (not regular password)');
-          logger.error('3. "Less secure app access" is enabled OR 2FA is set up with app password');
-          logger.error('4. Network connectivity to smtp.gmail.com:587');
+          logger.warn('⚠️ Email service verification failed - emails may still work on send');
+          logger.warn('Railway may block SMTP connections. Consider using Resend, SendGrid, or Mailgun.');
           return false;
         }
         
-        // Wait before retry (exponential backoff)
-        await new Promise(resolve => setTimeout(resolve, 2000 * (i + 1)));
+        // Wait before retry
+        await new Promise(resolve => setTimeout(resolve, 3000 * (i + 1)));
       }
     }
   }
@@ -176,6 +236,24 @@ class EmailService {
           command: lastError.command,
           response: lastError.response
         });
+        
+        // If it's a connection timeout, provide Railway-specific guidance
+        if (lastError.message.includes('timeout') || lastError.message.includes('ETIMEDOUT')) {
+          logger.error('');
+          logger.error('🚨 RAILWAY SMTP BLOCKING DETECTED');
+          logger.error('Railway often blocks outbound SMTP connections.');
+          logger.error('');
+          logger.error('Solutions:');
+          logger.error('1. Use a dedicated email service (recommended):');
+          logger.error('   - Resend (resend.com) - Free tier: 3,000 emails/month');
+          logger.error('   - SendGrid (sendgrid.com) - Free tier: 100 emails/day');
+          logger.error('   - Mailgun (mailgun.com) - Free tier: 5,000 emails/month');
+          logger.error('');
+          logger.error('2. Or try Railway Private Network (if available on your plan)');
+          logger.error('');
+          logger.error('3. The OTP is still logged above and returned in API response for manual verification.');
+        }
+        
         throw lastError; // Re-throw to be handled by caller
       } catch (error) {
         logger.error('❌ Email send error (final):', error.message);
