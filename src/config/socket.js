@@ -10,10 +10,34 @@ const setupChat = require('../sockets/chat');
 let io;
 
 const initializeSocket = (server) => {
+  // Socket.IO CORS configuration
+  const allowedOrigins = [
+    'https://fluxx-chi.vercel.app',
+    'http://localhost:3000',
+    'http://localhost:5173',
+    'http://localhost:5000'
+  ];
+
   io = socketIO(server, {
     cors: {
-      origin: true, // Allow all origins for testing
-      credentials: true
+      origin: function (origin, callback) {
+        // Allow requests with no origin
+        if (!origin) return callback(null, true);
+        
+        // Check if origin is in allowed list
+        if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV === 'development') {
+          callback(null, true);
+        } else {
+          // In production, only allow specific origins
+          if (process.env.NODE_ENV === 'production') {
+            callback(new Error('Not allowed by CORS'));
+          } else {
+            callback(null, true); // Allow in development
+          }
+        }
+      },
+      credentials: true,
+      methods: ['GET', 'POST']
     },
     pingTimeout: 60000,
     pingInterval: 25000

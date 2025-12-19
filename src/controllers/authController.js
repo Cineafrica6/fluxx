@@ -2,6 +2,7 @@ const User = require('../models/User');
 const authService = require('../services/authService');
 const emailService = require('../services/emailService');
 const { generateOTP, validateUsername } = require('../utils/helpers');
+const logger = require('../utils/logger');
 
 // @desc    Register new user
 // @route   POST /api/auth/register
@@ -52,8 +53,14 @@ const register = async (req, res, next) => {
       verificationOTPExpiry
     });
 
-    // Send verification OTP email
-    await emailService.sendVerificationOTP(email, verificationOTP);
+    // Send verification OTP email (don't fail registration if email fails)
+    try {
+      await emailService.sendVerificationOTP(email, verificationOTP);
+    } catch (emailError) {
+      // Log error but don't fail registration
+      // OTP is still returned in response for manual verification
+      logger.error('Failed to send verification email:', emailError.message);
+    }
 
     // Generate JWT
     const token = authService.generateToken(user._id);
@@ -231,8 +238,14 @@ const resendOTP = async (req, res, next) => {
     user.verificationOTPExpiry = verificationOTPExpiry;
     await user.save();
 
-    // Send new OTP
-    await emailService.sendVerificationOTP(email, verificationOTP);
+    // Send new OTP (don't fail if email fails)
+    try {
+      await emailService.sendVerificationOTP(email, verificationOTP);
+    } catch (emailError) {
+      // Log error but don't fail the request
+      // OTP is still returned in response for manual verification
+      logger.error('Failed to send verification email:', emailError.message);
+    }
 
     res.json({
       success: true,

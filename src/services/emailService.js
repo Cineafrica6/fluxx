@@ -13,20 +13,51 @@ class EmailService {
         auth: {
           user: process.env.EMAIL_USER,
           pass: process.env.EMAIL_PASS // Gmail app password
-        }
+        },
+        // Additional options for better reliability
+        tls: {
+          rejectUnauthorized: false // Allow self-signed certificates (for Railway/production)
+        },
+        // Connection timeout
+        connectionTimeout: 10000, // 10 seconds
+        // Greeting timeout
+        greetingTimeout: 10000,
+        // Socket timeout
+        socketTimeout: 10000
       });
       
-      // Verify connection
-      this.transporter.verify((error, success) => {
-        if (error) {
-          logger.error('Email service configuration error:', error);
-        } else {
-          logger.success('✅ Email service ready (Gmail SMTP)');
-        }
-      });
+      // Verify connection with retry logic
+      this.verifyConnection();
     } else {
       logger.warn('⚠️ Email service not configured. Set EMAIL_USER and EMAIL_PASS in .env');
       this.transporter = null;
+    }
+  }
+
+  async verifyConnection(retries = 3) {
+    if (!this.transporter) return;
+    
+    for (let i = 0; i < retries; i++) {
+      try {
+        await this.transporter.verify();
+        logger.success('✅ Email service ready (Gmail SMTP)');
+        return true;
+      } catch (error) {
+        logger.error(`Email service verification attempt ${i + 1}/${retries} failed:`, error.message);
+        
+        if (i === retries - 1) {
+          logger.error('❌ Email service verification failed after all retries');
+          logger.error('Please check:');
+          logger.error('1. EMAIL_USER and EMAIL_PASS are set correctly in Railway environment variables');
+          logger.error('2. Gmail app password is valid (not regular password)');
+          logger.error('3. "Less secure app access" is enabled OR 2FA is set up with app password');
+          logger.error('4. Network connectivity to smtp.gmail.com:587');
+          return false;
+        }
+        
+        // Wait before retry (exponential backoff)
+        await new Promise(resolve => setTimeout(resolve, 2000 * (i + 1)));
+      }
     }
   }
 
@@ -67,57 +98,89 @@ class EmailService {
     
     if (this.transporter) {
       try {
-        await this.transporter.sendMail({
-          from: `"Fluxx" <${process.env.EMAIL_USER}>`,
-          to: email,
-          subject: 'Verify your Fluxx account - OTP',
-          html: `
-            <!DOCTYPE html>
-            <html>
-            <head>
-              <style>
-                body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-                .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-                .header { background: #667eea; color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-                .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-                .otp-box { background: white; border: 3px solid #667eea; border-radius: 10px; padding: 20px; text-align: center; margin: 20px 0; }
-                .otp-code { font-size: 36px; font-weight: bold; letter-spacing: 8px; color: #667eea; font-family: 'Courier New', monospace; }
-                .footer { text-align: center; margin-top: 20px; color: #666; font-size: 12px; }
-              </style>
-            </head>
-            <body>
-              <div class="container">
-                <div class="header">
-                  <h1>Welcome to Fluxx</h1>
-                </div>
-                <div class="content">
-                  <p>Hi there!</p>
-                  <p>Thank you for signing up for Fluxx. To complete your registration, please enter the verification code below:</p>
-                  
-                  <div class="otp-box">
-                    <p style="margin: 0 0 10px 0; color: #666;">Your verification code:</p>
-                    <div class="otp-code">${otp}</div>
+        // Retry logic for email sending
+        let lastError;
+        const maxRetries = 3;
+        
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+          try {
+            await this.transporter.sendMail({
+              from: `"Fluxx" <${process.env.EMAIL_USER}>`,
+              to: email,
+              subject: 'Verify your Fluxx account - OTP',
+              html: `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                  <style>
+                    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+                    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                    .header { background: #667eea; color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+                    .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+                    .otp-box { background: white; border: 3px solid #667eea; border-radius: 10px; padding: 20px; text-align: center; margin: 20px 0; }
+                    .otp-code { font-size: 36px; font-weight: bold; letter-spacing: 8px; color: #667eea; font-family: 'Courier New', monospace; }
+                    .footer { text-align: center; margin-top: 20px; color: #666; font-size: 12px; }
+                  </style>
+                </head>
+                <body>
+                  <div class="container">
+                    <div class="header">
+                      <h1>Welcome to Fluxx</h1>
+                    </div>
+                    <div class="content">
+                      <p>Hi there!</p>
+                      <p>Thank you for signing up for Fluxx. To complete your registration, please enter the verification code below:</p>
+                      
+                      <div class="otp-box">
+                        <p style="margin: 0 0 10px 0; color: #666;">Your verification code:</p>
+                        <div class="otp-code">${otp}</div>
+                      </div>
+                      
+                      <p><strong>This code expires in 10 minutes.</strong></p>
+                      
+                      <p>If you didn't request this code, please ignore this email.</p>
+                      
+                      <p>Best regards,<br>The Fluxx Team</p>
+                    </div>
+                    <div class="footer">
+                      <p>This is an automated email. Please do not reply.</p>
+                    </div>
                   </div>
-                  
-                  <p><strong>This code expires in 10 minutes.</strong></p>
-                  
-                  <p>If you didn't request this code, please ignore this email.</p>
-                  
-                  <p>Best regards,<br>The Fluxx Team</p>
-                </div>
-                <div class="footer">
-                  <p>This is an automated email. Please do not reply.</p>
-                </div>
-              </div>
-            </body>
-            </html>
-          `,
-          text: `Welcome to Fluxx!\n\nYour verification code is: ${otp}\n\nThis code expires in 10 minutes.\n\nIf you didn't request this code, please ignore this email.`
+                </body>
+                </html>
+              `,
+              text: `Welcome to Fluxx!\n\nYour verification code is: ${otp}\n\nThis code expires in 10 minutes.\n\nIf you didn't request this code, please ignore this email.`
+            });
+            logger.success(`✅ OTP email sent successfully to ${email} (attempt ${attempt})`);
+            return otp; // Success, exit retry loop
+          } catch (error) {
+            lastError = error;
+            logger.warn(`⚠️ Email send attempt ${attempt}/${maxRetries} failed:`, error.message);
+            
+            // If not the last attempt, wait before retrying
+            if (attempt < maxRetries) {
+              const delay = 2000 * attempt; // Exponential backoff: 2s, 4s, 6s
+              logger.info(`Retrying in ${delay}ms...`);
+              await new Promise(resolve => setTimeout(resolve, delay));
+              
+              // Re-verify connection before retry
+              await this.verifyConnection(1);
+            }
+          }
+        }
+        
+        // All retries failed
+        logger.error('❌ Email send failed after all retries:', lastError.message);
+        logger.error('Error details:', {
+          code: lastError.code,
+          command: lastError.command,
+          response: lastError.response
         });
-        logger.success(`✅ OTP email sent successfully to ${email}`);
+        throw lastError; // Re-throw to be handled by caller
       } catch (error) {
-        logger.error('❌ Email send error:', error.message);
-        // Still log OTP even if email fails
+        logger.error('❌ Email send error (final):', error.message);
+        // Don't throw - still return OTP so user can verify
+        // The OTP is logged above for manual verification if needed
       }
     } else {
       logger.warn('⚠️ Email transporter not configured. OTP logged above for testing.');
