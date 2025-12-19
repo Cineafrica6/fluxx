@@ -13,6 +13,176 @@ This guide provides comprehensive documentation for integrating the Fluxx backen
 7. [WebRTC Video Chat](#webrtc-video-chat)
 8. [Error Handling](#error-handling)
 9. [Best Practices](#best-practices)
+10. [Common Integration Questions](#common-integration-questions)
+
+---
+
+## Common Integration Questions
+
+### Environment Configuration
+
+**Q: Should I configure for development or production?**  
+**A:** Use environment variables to switch between environments:
+
+```javascript
+// .env or .env.local
+VITE_API_BASE_URL=http://localhost:5000/api
+VITE_USE_MOCK=false
+VITE_SHOW_OTP=true  // Only for development
+
+// In your code (e.g., config.js)
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true';
+const SHOW_OTP = import.meta.env.VITE_SHOW_OTP === 'true' || import.meta.env.DEV;
+```
+
+### Mock Services
+
+**Q: Should I replace mock services or keep them as fallback?**  
+**A:** Keep mock services as a fallback option for development:
+
+```javascript
+// api/index.js
+const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true';
+
+export const authService = {
+  register: USE_MOCK ? mockRegister : realRegister,
+  login: USE_MOCK ? mockLogin : realLogin,
+  // ... etc
+};
+```
+
+This allows you to:
+- Develop frontend features without backend dependency
+- Test UI flows independently
+- Switch to real API when ready
+
+### Field Naming: displayName vs username
+
+**Q: Backend uses `displayName`, but frontend uses `username`. Should I rename?**  
+**A:** Yes, use `displayName` throughout your frontend for consistency with the backend:
+
+```javascript
+// ✅ Correct - Use displayName
+const formData = {
+  displayName: "johndoe123",
+  email: "user@example.com",
+  password: "password123"
+};
+
+// ❌ Incorrect - Don't use username
+const formData = {
+  username: "johndoe123",  // Backend won't accept this
+  // ...
+};
+```
+
+The backend expects and returns `displayName` in all responses.
+
+### OTP Display
+
+**Q: Should I display OTP to users after registration?**  
+**A:** Only in development. In production, OTP should only be sent via email:
+
+```javascript
+// After registration
+if (data.success && data.data.otp) {
+  // Store token
+  localStorage.setItem('fluxx_token', data.data.token);
+  
+  // Only show OTP in development
+  if (SHOW_OTP) {
+    console.log('OTP (dev only):', data.data.otp);
+    // Optionally show in UI with a dev-only banner
+    showDevOTP(data.data.otp);
+  } else {
+    // Production: Show message to check email
+    showMessage('Please check your email for the verification code.');
+  }
+}
+```
+
+**Note:** The backend includes OTP in the response for testing purposes. In production, users should only receive it via email.
+
+### Email Verification Flow
+
+**Q: After verification, should I keep the registration token, re-login, or redirect?**  
+**A:** Keep using the token from registration. The backend doesn't issue a new token after verification, but the existing token remains valid:
+
+```javascript
+async function verifyEmail(email, otp) {
+  const response = await fetch(`${API_BASE_URL}/auth/verify-email`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, otp })
+  });
+  
+  const data = await response.json();
+  
+  if (data.success) {
+    // Token from registration is still valid - no need to re-login
+    const token = localStorage.getItem('fluxx_token');
+    
+    // Refresh user data to get updated isVerified status
+    const userResponse = await fetch(`${API_BASE_URL}/auth/me`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    
+    const userData = await userResponse.json();
+    
+    if (userData.success && userData.data.isVerified) {
+      // User is verified - proceed to main app
+      // No need to redirect to login
+      navigate('/app');
+    }
+  }
+}
+```
+
+**Flow:**
+1. User registers → receives token
+2. User verifies email → token still valid
+3. Refresh user data → `isVerified: true`
+4. Proceed to app (no re-login needed)
+
+### Demo Credentials
+
+**Q: Should I remove demo credentials from the login page?**  
+**A:** Remove for production, keep only in development:
+
+```jsx
+{/* Only show in development */}
+{import.meta.env.DEV && (
+  <div className="demo-credentials-banner">
+    <p>Demo: test@example.com / password123</p>
+  </div>
+)}
+```
+
+### Socket.IO URL
+
+**Q: Is Socket.IO on the same host as the API?**  
+**A:** Yes, Socket.IO runs on the same server as the API (same host and port):
+
+```javascript
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+const SOCKET_URL = API_BASE_URL.replace('/api', '');
+
+// Examples:
+// Development: http://localhost:5000
+// Production: https://fluxx-production.up.railway.app
+
+import { io } from 'socket.io-client';
+
+const socket = io(SOCKET_URL, {
+  auth: {
+    token: localStorage.getItem('fluxx_token')
+  },
+  transports: ['websocket', 'polling']
+});
+```
+
+**Important:** Socket.IO requires authentication via the `token` in the `auth` object, not in headers.
 
 ---
 
@@ -25,7 +195,7 @@ This guide provides comprehensive documentation for integrating the Fluxx backen
 const API_BASE_URL = 'http://localhost:5000/api';
 
 // Production (update with your deployed URL)
-const API_BASE_URL = 'https://your-domain.com/api';
+const API_BASE_URL = 'https://fluxx-production.up.railway.app/api';
 ```
 
 ### Headers

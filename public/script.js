@@ -672,7 +672,7 @@ async function startWebRTC(isInitiator) {
         peerConnection.addTrack(track, localStream);
         logSocket(`Added local track: ${track.kind}`, 'info');
     });
-    
+
     // Store reference to local stream for track replacement
     peerConnection._localStream = localStream;
 
@@ -700,8 +700,8 @@ async function startWebRTC(isInitiator) {
                 remoteStream.removeTrack(existingTrack);
                 existingTrack.stop(); // Stop the old track
                 logSocket(`Replaced existing ${event.track.kind} track`, 'info');
-            }
-            remoteStream.addTrack(event.track);
+        }
+        remoteStream.addTrack(event.track);
             streamToUse = remoteStream;
             if (!remoteStreamReference) {
                 remoteStreamReference = streamToUse;
@@ -1052,14 +1052,14 @@ async function startWebRTC(isInitiator) {
                 offerToReceiveAudio: true,
                 offerToReceiveVideo: true
             });
-            await peerConnection.setLocalDescription(offer);
-            
-            socket.emit('webrtc_offer', {
-                offer: offer,
-                roomId: currentRoomId
-            });
-            
-            logSocket('WebRTC offer sent', 'info');
+        await peerConnection.setLocalDescription(offer);
+        
+        socket.emit('webrtc_offer', {
+            offer: offer,
+            roomId: currentRoomId
+        });
+        
+        logSocket('WebRTC offer sent', 'info');
         } catch (error) {
             logSocket(`Error creating offer: ${error.message}`, 'error');
         }
@@ -1068,9 +1068,9 @@ async function startWebRTC(isInitiator) {
 
 async function handleOffer(offer) {
     try {
-        if (!peerConnection) {
-            await startWebRTC(false);
-        }
+    if (!peerConnection) {
+        await startWebRTC(false);
+    }
 
         // Check if we're already processing this offer
         if (peerConnection.signalingState !== 'stable' && peerConnection.signalingState !== 'have-local-offer') {
@@ -1078,21 +1078,21 @@ async function handleOffer(offer) {
             return;
         }
 
-        await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+    await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
         logSocket('Remote description set (offer)', 'info');
-        
+    
         const answer = await peerConnection.createAnswer({
             offerToReceiveAudio: true,
             offerToReceiveVideo: true
         });
-        await peerConnection.setLocalDescription(answer);
-        
-        socket.emit('webrtc_answer', {
-            answer: answer,
-            roomId: currentRoomId
-        });
-        
-        logSocket('WebRTC answer sent', 'info');
+    await peerConnection.setLocalDescription(answer);
+    
+    socket.emit('webrtc_answer', {
+        answer: answer,
+        roomId: currentRoomId
+    });
+    
+    logSocket('WebRTC answer sent', 'info');
     } catch (error) {
         logSocket(`Error handling offer: ${error.message}`, 'error');
     }
@@ -1124,9 +1124,9 @@ async function handleAnswer(answer) {
             return;
         }
 
-        await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+    await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
         logSocket('Answer remote description set', 'info');
-        logSocket('WebRTC connection established', 'success');
+    logSocket('WebRTC connection established', 'success');
     } catch (error) {
         logSocket(`Error handling answer: ${error.message}`, 'error');
         // If error is about wrong state but we have tracks, connection might still work
@@ -1139,7 +1139,7 @@ async function handleAnswer(answer) {
 async function handleIceCandidate(candidate) {
     try {
         if (peerConnection && candidate) {
-            await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+        await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
             logSocket('ICE candidate added', 'info');
         }
     } catch (error) {
