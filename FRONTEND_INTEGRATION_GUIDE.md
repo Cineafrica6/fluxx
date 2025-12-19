@@ -79,71 +79,29 @@ const formData = {
 
 The backend expects and returns `displayName` in all responses.
 
-### OTP Display
+### Email Verification (Removed)
 
-**Q: Should I display OTP to users after registration?**  
-**A:** Only in development. In production, OTP should only be sent via email:
+**Q: Do users need to verify their email?**  
+**A:** No! Email verification has been removed. Users are **automatically verified** upon registration and can immediately use the app.
+
+**Registration Flow:**
+1. User registers → receives token
+2. User is automatically verified (`isVerified: true`)
+3. Proceed directly to app (no verification step needed)
 
 ```javascript
 // After registration
-if (data.success && data.data.otp) {
+if (data.success) {
   // Store token
   localStorage.setItem('fluxx_token', data.data.token);
   
-  // Only show OTP in development
-  if (SHOW_OTP) {
-    console.log('OTP (dev only):', data.data.otp);
-    // Optionally show in UI with a dev-only banner
-    showDevOTP(data.data.otp);
-  } else {
-    // Production: Show message to check email
-    showMessage('Please check your email for the verification code.');
-  }
+  // User is immediately verified - go to app
+  navigate('/app');
+  
+  // Show success message
+  showSuccess('Welcome to Fluxx!');
 }
 ```
-
-**Note:** The backend includes OTP in the response for testing purposes. In production, users should only receive it via email.
-
-### Email Verification Flow
-
-**Q: After verification, should I keep the registration token, re-login, or redirect?**  
-**A:** Keep using the token from registration. The backend doesn't issue a new token after verification, but the existing token remains valid:
-
-```javascript
-async function verifyEmail(email, otp) {
-  const response = await fetch(`${API_BASE_URL}/auth/verify-email`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, otp })
-  });
-  
-  const data = await response.json();
-  
-  if (data.success) {
-    // Token from registration is still valid - no need to re-login
-    const token = localStorage.getItem('fluxx_token');
-    
-    // Refresh user data to get updated isVerified status
-    const userResponse = await fetch(`${API_BASE_URL}/auth/me`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    
-    const userData = await userResponse.json();
-    
-    if (userData.success && userData.data.isVerified) {
-      // User is verified - proceed to main app
-      // No need to redirect to login
-      navigate('/app');
-    }
-  }
-}
-```
-
-**Flow:**
-1. User registers → receives token
-2. User verifies email → token still valid
-3. Refresh user data → `isVerified: true`
-4. Proceed to app (no re-login needed)
 
 ### Demo Credentials
 
@@ -236,19 +194,20 @@ const headers = {
 ```json
 {
   "success": true,
-  "message": "Registration successful. Please verify your account with the OTP.",
+  "message": "Registration successful. Your account is ready to use.",
   "data": {
     "user": {
       "id": "507f1f77bcf86cd799439011",
       "email": "user@example.com",
       "displayName": "johndoe123",
-      "isVerified": false
+      "isVerified": true
     },
-    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "otp": "123456"
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
   }
 }
 ```
+
+**Note:** Users are automatically verified on registration. No OTP verification required.
 
 **Error Responses:**
 - `400` - Validation error, username taken, or email exists
